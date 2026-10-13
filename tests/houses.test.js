@@ -54,3 +54,15 @@ test('Sunny Side room sizes match the registration plan (clear sizes, ±0.4 ft)'
   assert.ok(near(clear(19.72, 30.83, 0.36, 0.6), 10.67));
   assert.ok(near(clear(21.17, 29.41), 7.875));
 });
+
+test('both starting arrangements are valid independent copies of their home', () => {
+  for (const id of HOUSE_IDS) {
+    const first = HOUSES[id].template();
+    const original = structuredClone(first);
+    assert.equal(validLayout(first), true);
+    assert.equal(first.house, id);
+    first.items[0].x += 50;
+    first.openings.pop();
+    assert.deepEqual(HOUSES[id].template(), original);
+  }
+});

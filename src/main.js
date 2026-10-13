@@ -36,97 +36,10 @@ const finishHex = key => look === 'illustrated' ? ILLUSTRATED_FINISHES[key] : FI
 const colorCss = hex => '#' + hex.toString(16).padStart(6, '0');
 const FIN_CSS = { oak: '#c49a6c', walnut: '#6e4b34', wenge: '#3b2a20', white: '#f4f2ed', charcoal: '#3b3a38', linen: '#d8cfbf', sage: '#98a68f', clay: '#c58b6d' };
 
-/* ---------- The flat as drawn (sheet A-01) ---------- */
-function btmTemplate() {
-  const W = (x1, y1, x2, y2, kind) => ({ a: P(x1, y1), b: P(x2, y2), kind: kind || 'int' });
-  const walls = [
-    W(356,161,590,161,'ext'), W(590,161,590,70,'ext'), W(590,70,980,70,'ext'), W(980,70,980,395,'ext'),
-    W(980,395,980,707,'railing'),
-    W(980,707,980,1084,'ext'), W(980,1084,70,1084,'ext'), W(70,1084,70,408,'ext'), W(70,408,356,408,'ext'), W(356,408,356,161,'ext'),
-    W(590,161,590,395), W(590,395,980,395), W(902,707,980,707), W(902,395,902,707), W(356,408,356,1084),
-    W(356,707,655,707), W(655,707,655,1084), W(785,707,785,1019), W(655,785,785,785), W(655,1019,980,1019),
-    W(200,928,356,928), W(200,928,200,1084), W(356,629,447,629), W(447,629,447,707), W(742,707,785,707)
-  ];
-  const D = (x1, y1, x2, y2, hinge, sx, sy, extra) => Object.assign({ type: 'door', a: P(x1, y1), b: P(x2, y2), hinge, swing: [sx, sy] }, extra || {});
-  const Wn = (x1, y1, x2, y2, sill) => ({ type: 'window', a: P(x1, y1), b: P(x2, y2), sill: sill == null ? 3 : sill });
-  const openings = [
-    D(501.6,161,579.6,161, 1, 0, 1, { wood: true }),
-    D(596,395,674,395, 0, 0, -1),
-    D(356,421,356,499, 1, -1, 0),
-    D(371.6,629,434,629, 0, 0, 1),
-    D(564,707,642,707, 1, 0, 1),
-    D(681,785,746,785, 0, 0, 1),
-    D(863,1019,928,1019, 0, 0, 1),
-    D(200,933,200,998, 0, 1, 0),
-    { type: 'double', a: P(902,512), b: P(902,590), hinge: 0, swing: [1, 0] },
-    Wn(369,161,460,161), Wn(642,70,824,70), Wn(564,1084,642,1084), Wn(138,1084,194,1084), Wn(694,1084,954,1084),
-    Wn(980,239,980,330), Wn(980,733,980,824), Wn(70,447,70,538), Wn(902,447,902,512,1), Wn(902,590,902,655,1)
-  ];
-  const R = Math.PI, H = Math.PI / 2;
-  let n = 0;
-  const I = (type, x, z, rot, finish, extra) => Object.assign({ id: 'i' + (++n), type, x, z, rot: rot || 0, finish: finish || CATALOG[type].fin }, extra || {});
-  const items = [
-    // Bedroom 1
-    I('queenBed', 7.63, 24.23, -H, 'oak'), I('bedside', 10.37, 21.0, -H, 'oak'), I('bedside', 10.37, 27.45, -H, 'oak'),
-    I('wardrobe', 1.28, 35.96, H, 'walnut', { w: 5.75 }),
-    // Study (was Bedroom 2)
-    I('wardrobe', 29.15, 11.45, R, 'walnut', { w: 11.4 }),
-    ...studyItems(I),
-    // Bedroom 3
-    I('queenBed', 14.6, 30.6, H, 'oak'), I('bedside', 11.9, 27.4, H, 'oak'), I('bedside', 11.9, 33.8, H, 'oak'),
-    I('wardrobe', 14.97, 37.92, R, 'walnut', { w: 7.75 }),
-    // Foyer, living, puja
-    I('shoeRack', 11.75, 5.9, H, 'white'), ...foyerItems(I),
-    I('rug', 18.05, 18.3, 0, 'clay', { w: 9.5, d: 5.6 }),
-    I('lSofa', 18.0, 17.3, 0, 'linen'), I('coffeeTable', 16.6, 19.6, 0, 'oak'),
-    I('tvUnit', 16.9, 23.67, R, 'wenge'), I('wallTV', 16.9, 24.07, R), I('pujaUnit', 13.2, 23.75, R, 'walnut'),
-    // Dining: round table for four, fridge by the kitchen opening
-    I('roundDining', 27.0, 18.1, 0, 'walnut'), I('fridge', 30.7, 23.3, R, 'white'),
-    // Kitchen
-    I('counter', 33.92, 30.5, -H, 'charcoal', { w: 11.7 }), I('kitchenSink', 33.92, 27.2, -H), I('hob', 33.92, 32.35, -H),
-    I('wallCabinet', 28.17, 28.27, H, 'white', { w: 7.2 }), I('tallUnit', 28.62, 35.3, H, 'charcoal'),
-    // Utility and baths
-    I('utilitySink', 33.85, 37.7, -H, 'white'), I('washer', 23.9, 37.7, R),
-    I('wc', 24.1, 35.23, R), I('shower', 26.7, 35.2, 0, 'white', { w: 2.3, d: 2.3 }), I('basin', 26.73, 26.0, -H, 'white'),
-    I('wc', 6.2, 37.67, R), I('basin', 10.5, 36.6, -H, 'white'), I('shower', 9.3, 34.2, 0, 'white', { w: 3.2, d: 2.1 }),
-    // Balcony
-    I('plant', 32.95, 13.6, 0, 'white'), I('plant', 33.3, 23.4, 0, 'clay')
-  ];
-  const labels = [
-    ['BEDROOM 1', 215, 600], ['STUDY', 870, 225], ['BEDROOM 3', 545, 950], ['FOYER', 473, 320], ['LIVING / DINING', 650, 440],
-    ['KITCHEN', 865, 810], ['UTILITY', 795, 1058], ['BALCONY', 941, 556, true], ['COMMON BATH', 720, 940, false, true],
-    ['ATTACHED BATH', 290, 1036, false, true], ['PUJA', 412, 695, false, true]
-  ].map(([t, x, y, rot, small]) => ({ text: t, p: P(x, y), rot: !!rot, small: !!small }));
-  return { walls, openings, items, labels, baseFloor: true, nextId: n + 1, migrations: { study2: true, tvWall: true, foyer1: true } };
-}
-/* Bedroom 2 as a study (your layout): an L-shaped desk in the north-east corner with one chair,
-   a bookshelf and two armchairs on the door side around a round table on a sage rug, a plant and a floor lamp. */
-function studyItems(I) {
-  const R = Math.PI, H = Math.PI / 2;
-  return [
-    I('desk', 30.9, 1.13, 0, 'oak'), I('desk', 33.8, 5.0, -H, 'oak', { w: 6 }), I('deskChair', 31.2, 3.6, R, 'charcoal'),
-    I('bookshelf', 20.75, 1.9, H, 'oak'),
-    I('rug', 26.3, 5.8, 0, 'sage', { w: 6, d: 4.6 }), I('roundCoffee', 25.5, 5.9, 0, 'walnut'),
-    I('armchair', 21.55, 4.3, H, 'linen'), I('armchair', 21.55, 7.3, H, 'linen'),
-    I('plant', 27.4, 1.3, 0, 'clay'), I('floorLamp', 34.1, 8.7, 0, 'white')
-  ];
-}
-/* Foyer: helmets and keys on the wall above the shoe cabinet, a shoe bench next to it, a slatted partition
-   screening the living room from the door, and a mat inside the main door. The right-hand side stays clear
-   for the main door to swing open. */
-function foyerItems(I) {
-  const H = Math.PI / 2;
-  return [
-    I('helmetRack', 11.53, 5.9, H, 'walnut'),
-    I('shoeBench', 11.85, 9.1, H, 'oak'),
-    I('slatPartition', 12.95, 10.75, 0, 'oak', { w: 3.5 }),
-    I('doormat', 18.2, 4.6, 0, 'clay', { w: 3, d: 1.8 })
-  ];
-}
 /* The house a layout belongs to supplies its outline, wet floors, location and compass (src/model/houses.js). */
 const HOUSE = () => houseOf(state);
 function sampleState(id = 'btm') {
-  const layout = id === 'btm' || !HOUSES[id] ? btmTemplate() : HOUSES[id].template();
+  const layout = (HOUSES[id] || HOUSES.btm).template();
   layout.items.forEach(it => { it.finish ||= CATALOG[it.type].fin; });
   return layout;
 }
@@ -2413,6 +2326,21 @@ mountSavedLayouts({
 /* Houses: each keeps its own working arrangement. Switching sets the current house's layout aside
    (STORE_KEY-house-<id>) and brings back the other's, or its starting layout the first time. Undo goes back. */
 const houseStashKey = id => STORE_KEY + '-house-' + id;
+document.getElementById('exportHomes').addEventListener('click', () => {
+  try {
+    const homes = Object.fromEntries(HOUSE_IDS.map(id => {
+      const raw = id === HOUSE().id ? serialize() : storage.getItem(houseStashKey(id));
+      return [id, normalizeLayout(raw ? JSON.parse(raw) : sampleState(id), CATALOG)];
+    }));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, homes }, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'blueprint-homes.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    document.getElementById('layoutsFeedback').textContent = 'Could not export homes: ' + error.message;
+  }
+});
+
 const houseBtn = document.getElementById('houseBtn'), houseMenu = document.getElementById('houseMenu');
 function updateHouseUI() {
   const current = HOUSE();

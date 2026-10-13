@@ -63,3 +63,5 @@ Spatial calculations depend on layout geometry, not mesh construction or camera 
 ### Placing and editing furniture
 
 Choose a furniture card to preview it on the floor. Move the pointer (or tap the floor), rotate with R, and click or press Place to add it. Arrow keys move the preview in quarter-foot steps; Enter places it and Escape cancels without changing the arrangement. On touch screens, tap to position and use Place to confirm. Selecting a placed piece opens its controls, including exact position, available dimensions, rotation and finishes. Existing pieces can still be dragged.
+
+Starting arrangements for both homes are stored in `src/model/starting-layouts.js`. These snapshots are cloned when opening a home for the first time or resetting to its starting arrangement. Existing browser autosaves stay intact. Use **Homes & layouts → Export both homes** to download the current working arrangements (including the inactive home) for backup or updating the committed snapshots. Named saved copies are separate.
