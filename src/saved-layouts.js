@@ -26,7 +26,7 @@ export function createLayoutStore(storage, key, catalog) {
       name = nameOf(name);
       if (!validLayout(layout, catalog)) throw new Error('This layout cannot be saved.');
       const entries = read();
-      if (entries.some(entry => entry.id !== id && entry.name.toLowerCase() === name.toLowerCase())) {
+      if (entries.some(entry => entry.id !== id && (entry.layout.house || 'btm') === (layout.house || 'btm') && entry.name.toLowerCase() === name.toLowerCase())) {
         throw new Error('That name is already used. Choose another name or update the existing layout.');
       }
       const entry = id ? entries.find(entry => entry.id === id) : null;
@@ -43,13 +43,13 @@ export function createLayoutStore(storage, key, catalog) {
   };
 }
 
-export function mountSavedLayouts({ store, snapshot, openLayout }) {
+export function mountSavedLayouts({ store, snapshot, openLayout, getHouse = () => 'btm', onOpen = () => {} }) {
   const dialog = document.getElementById('layoutsDialog');
   const list = document.getElementById('layoutsList');
   const form = document.getElementById('saveLayoutForm');
   const name = document.getElementById('layoutName');
   const feedback = document.getElementById('layoutsFeedback');
-  const trigger = document.getElementById('layoutsBtn');
+  const trigger = document.getElementById('houseBtn');
   function message(text, error = false) {
     feedback.textContent = text;
     feedback.classList.toggle('error', error);
@@ -74,11 +74,11 @@ export function mountSavedLayouts({ store, snapshot, openLayout }) {
     return b;
   }
   function render() {
-    const entries = store.list();
+    const entries = store.list().filter(entry => (entry.layout.house || 'btm') === getHouse());
     list.replaceChildren();
     if (!entries.length) {
       const empty = document.createElement('p'); empty.className = 'layouts-empty';
-      empty.textContent = 'No saved layouts yet. Give your current arrangement a name to keep a copy.'; list.append(empty);
+      empty.textContent = 'No saved arrangements for this home yet. Save your first idea above.'; list.append(empty);
     }
     entries.forEach(entry => {
       const row = document.createElement('li'); row.className = 'layout-card';
@@ -108,10 +108,11 @@ export function mountSavedLayouts({ store, snapshot, openLayout }) {
     });
   }
   trigger.addEventListener('click', () => {
-    message('');
+    onOpen(); message('');
     try { render(); } catch { list.replaceChildren(); message('Saved layouts could not be read. Existing data has been preserved.', true); }
     dialog.showModal();
   });
+  dialog.addEventListener('housechange', () => { name.value = ''; message(''); try { render(); } catch (error) { message(error.message, true); } });
   document.getElementById('closeLayouts').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => trigger.focus());
   dialog.addEventListener('keydown', event => event.stopPropagation());

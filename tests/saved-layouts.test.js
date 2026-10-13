@@ -44,3 +44,14 @@ test('invalid snapshots are rejected before persistence', () => {
   assert.throws(() => store.save('Broken', { ...blank(), walls: [{ a: [NaN, 0], b: [1, 2] }] }));
   assert.deepEqual(store.list(), []);
 });
+
+test('arrangement names belong to each home, including legacy BTM copies', () => {
+  const { store } = setup();
+  store.save('Living', blank());
+  store.save('Living', { ...blank(), house: 'sunny' });
+  assert.equal(store.list().length, 2);
+  assert.throws(() => store.save(' living ', { ...blank(), house: 'btm' }), /already used/);
+  const sunny = store.list().find(entry => entry.layout.house === 'sunny');
+  store.rename(sunny.id, 'Evening');
+  assert.equal(store.list().find(entry => !entry.layout.house).name, 'Living');
+});

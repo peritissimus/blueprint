@@ -1,3 +1,4 @@
+import { createFurnitureThumbnails } from './ui/furniture-thumbnails.js';
 import { normalizeLayout, blankLayout } from './model/layout.js';
 import { createSpatialCache, matchOpening } from './model/spatial.js';
 import { HOUSES, HOUSE_IDS, houseOf } from './model/houses.js';
@@ -1029,6 +1030,7 @@ const layoutRepository = createLayoutRepository(storage, STORE_KEY, CATALOG);
 let loadWarning = '';
 let state = loadState() || normalizeLayout(sampleState(), CATALOG);
 let undoStack = [];
+let placement = null;
 let mode = 'select', view = 'iso';
 let wallH = 6.5, fullH = 10, reveal = 'low', showLabels = true, showFurniture = true;
 let look = 'illustrated', showDims = true;
@@ -1620,13 +1622,13 @@ function select(sel) {
   if (was || structural(sel)) buildStructure();
   refreshSelection();
 }
-function fmt(n) { return (Math.round(n * 10) / 10).toString(); }
-let inspCollapsed = true;
+function fmt(n) { return (Math.round(n * 100) / 100).toString(); }
+let inspCollapsed = false;
 function renderInspector() {
   renderInspectorBody();
   if (inspector.hidden) return;
   inspector.classList.toggle('collapsed', inspCollapsed);
-  inspector.insertAdjacentHTML('afterbegin', `<div class="insp-ui"><button type="button" class="insp-more" data-ui="more" aria-expanded="${!inspCollapsed}">${inspCollapsed ? 'Edit ▾' : 'Less ▴'}</button><button type="button" data-ui="close" aria-label="Close">✕</button></div>`);
+  inspector.insertAdjacentHTML('afterbegin', `<div class="insp-ui"><button type="button" class="insp-more" data-ui="more" aria-expanded="${!inspCollapsed}">${inspCollapsed ? 'Show controls' : 'Hide controls'}</button><button type="button" data-ui="close" aria-label="Close">✕</button></div>`);
 }
 function renderInspectorBody() {
   if (!selection) { inspector.hidden = true; inspector.innerHTML = ''; return; }
@@ -1636,11 +1638,11 @@ function renderInspectorBody() {
     const deg = Math.round(((it.rot || 0) * 180) / Math.PI);
     let html = `<div><h2>${def.name}</h2><div class="dims">${fmt(w)} × ${fmt(d)} ft · at ${fmt(it.x)}, ${fmt(it.z)} · ${((deg % 360) + 360) % 360}°</div></div>`;
     html += `<div class="row"><span class="label">Turn</span><button class="mini" data-act="rotL" type="button" aria-label="Turn left 90 degrees">⟲ 90°</button><button class="mini" data-act="rot15L" type="button">−15°</button><button class="mini" data-act="rot15R" type="button">+15°</button><button class="mini" data-act="rotR" type="button" aria-label="Turn right 90 degrees">90° ⟳</button></div>`;
-    if (def.resize) {
-      html += `<div class="row"><span class="label">Size</span><button class="mini" data-act="wMinus" type="button">Width −</button><button class="mini" data-act="wPlus" type="button">Width +</button>`;
-      if (def.resize === 'wd') html += `<button class="mini" data-act="dMinus" type="button">Depth −</button><button class="mini" data-act="dPlus" type="button">Depth +</button>`;
-      html += `</div>`;
-    }
+    const measure = (key, label, value, min, max, step) => `<label>${label}<input type="number" data-measure="${key}" aria-label="${label}" value="${Math.round(value * 1000) / 1000}" min="${min}" max="${max}" step="${step}"></label>`;
+    html += '<div class="object-measures">' + measure('x', 'Position X (ft)', it.x, -1000, 1000, 0.25) + measure('z', 'Position Z (ft)', it.z, -1000, 1000, 0.25);
+    if (def.resize) html += measure('w', 'Width (ft)', w, 1, 30, 0.5);
+    if (def.resize === 'wd') html += measure('d', 'Depth (ft)', d, 1, 30, 0.5);
+    html += '</div>';
     html += `<div class="row"><span class="label">Finish · ${FINISHES[it.finish] ? FINISHES[it.finish].name : ''}</span>` +
       Object.keys(FINISHES).map(k => `<button class="swatch" type="button" data-fin="${k}" aria-label="${FINISHES[k].name}" aria-pressed="${it.finish === k}" style="background:${look === 'illustrated' ? colorCss(finishHex(k)) : FIN_CSS[k]}"></button>`).join('') + `</div>`;
     html += `<div class="row"><button class="mini" data-act="dup" type="button">Duplicate</button><button class="mini danger" data-act="del" type="button">Delete</button></div>`;
@@ -1671,6 +1673,18 @@ function renderInspectorBody() {
     inspector.innerHTML = html;
   }
 }
+inspector.addEventListener('change', event => {
+  const input = event.target, key = input.dataset.measure;
+  if (!['x', 'z', 'w', 'd'].includes(key) || selection?.kind !== 'item') return;
+  if (!input.checkValidity() || input.value === '') { input.reportValidity(); return; }
+  const item = itemById(selection.id), value = Number(input.value);
+  if (!item || !Number.isFinite(value) || item[key] === value) return;
+  pushUndo(); item[key] = value; buildItem(item);
+  if (selHelper) selHelper.setFromObject(itemObjs.get(item.id));
+  const size = dims(item);
+  inspector.querySelector('.dims').textContent = `${fmt(size.w)} × ${fmt(size.d)} ft · at ${fmt(item.x)}, ${fmt(item.z)} · ${Math.round(((item.rot || 0) * 180 / Math.PI + 360) % 360)}°`;
+  save();
+});
 inspector.addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn || !selection) return;
   if (btn.dataset.ui === 'close') { select(null); return; }
@@ -1742,41 +1756,91 @@ function openingAction(act) {
   buildStructure(); refreshSelection(); save();
 }
 
+/* Furniture placement is temporary scene state: never persisted until confirmed. */
+function cancelPlacement() {
+  if (!placement) return;
+  scene.remove(placement.group); disposeGeometries(placement.group);
+  placement.materials.forEach(material => material.dispose());
+  placement = null; controls.enabled = true;
+  document.getElementById('placementBar').hidden = true;
+  document.body.classList.remove('placing'); renderer.domElement.style.cursor = '';
+  invalidate();
+}
+function movePlacement(point) {
+  if (!placement) return;
+  const p = placement; p.x = snap(point.x, 0.25); p.z = snap(point.z, 0.25);
+  const bounds = wallsBox();
+  p.valid = state.baseFloor ? inPoly(p.x, p.z, HOUSE().footprint) : !bounds || (p.x >= bounds[0] && p.x <= bounds[2] && p.z >= bounds[1] && p.z <= bounds[3]);
+  p.group.position.set(p.x, CATALOG[p.type].elev || 0, p.z); p.group.rotation.y = p.rot;
+  p.materials.forEach(material => { if (material.color) material.color.copy(material.userData.previewColor).lerp(new THREE.Color(p.valid ? 0x409883 : 0xd65b4d), 0.32); });
+  document.getElementById('placementHint').textContent = p.valid ? `${fmt(p.x)}, ${fmt(p.z)} ft · ¼ ft snap · R to rotate` : 'Choose a point inside the floor';
+  document.getElementById('placementConfirm').disabled = !p.valid;
+  invalidate();
+}
+function beginPlacement(type) {
+  cancelPlacement(); if (view === 'walk') setView(lastPlanView);
+  if (browsing) setBrowsing(false); setMode('select'); select(null);
+  const def = CATALOG[type], group = new THREE.Group(), clones = new Map();
+  def.build(group, fin(def.fin), def.w, def.d);
+  group.traverse(object => {
+    if (!object.material) return;
+    const clone = original => {
+      if (!clones.has(original)) {
+        const material = original.clone(); material.transparent = true; material.opacity = Math.min(original.opacity, 0.58); material.depthWrite = false;
+        material.userData.previewColor = original.color?.clone(); clones.set(original, material);
+      }
+      return clones.get(original);
+    };
+    object.material = Array.isArray(object.material) ? object.material.map(clone) : clone(object.material);
+    object.raycast = () => {};
+  });
+  placement = { type, group, materials: [...clones.values()], x: 0, z: 0, rot: 0, valid: false };
+  scene.add(group); controls.enabled = false; document.body.classList.add('placing');
+  document.getElementById('placementName').textContent = `Place ${def.name.toLowerCase()}`;
+  document.getElementById('placementBar').hidden = false;
+  renderer.domElement.style.cursor = 'crosshair'; toggleCatalog(false);
+  movePlacement(floorAtScreen(0.5, 0.5, true) || CENTER);
+  document.getElementById('placementConfirm').focus({ preventScroll: true });
+}
+function rotatePlacement() { if (placement) { placement.rot -= Math.PI / 2; movePlacement(placement); } }
+function confirmPlacement() {
+  if (!placement?.valid) return;
+  const { type, x, z, rot } = placement; cancelPlacement(); addItem(type, x, z, rot);
+}
+document.getElementById('placementRotate').addEventListener('click', rotatePlacement);
+document.getElementById('placementCancel').addEventListener('click', cancelPlacement);
+document.getElementById('placementConfirm').addEventListener('click', confirmPlacement);
+
 /* ---------- Catalog UI ---------- */
 const catalogList = document.getElementById('catalogList');
 function renderCatalog(filter) {
   const q = (filter || '').trim().toLowerCase();
+  const category = document.getElementById('catalogCategory').value;
   catalogList.innerHTML = CAT_ORDER.map(cat => {
-    const keys = Object.keys(CATALOG).filter(k => CATALOG[k].cat === cat && (!q || CATALOG[k].name.toLowerCase().includes(q) || cat.toLowerCase().includes(q)));
+    const keys = Object.keys(CATALOG).filter(k => (!category || category === cat) && CATALOG[k].cat === cat && (!q || CATALOG[k].name.toLowerCase().includes(q) || cat.toLowerCase().includes(q)));
     if (!keys.length) return '';
     return `<section class="cat"><h3>${cat}</h3><div class="cat-grid">` + keys.map(k => {
       const d = CATALOG[k];
-      return `<button type="button" class="item-btn" draggable="true" data-type="${k}"><b>${d.name}</b><span>${fmt(d.w)} × ${fmt(d.d)} ft</span></button>`;
+      return `<button type="button" class="item-btn" data-type="${k}"><img class="furniture-thumb" data-thumbnail="${k}" alt="" width="224" height="168"><b>${d.name}</b><span>${fmt(d.w)} × ${fmt(d.d)} ft</span></button>`;
     }).join('') + `</div></section>`;
   }).join('') || '<p style="color:var(--muted);margin:12px 4px">No furniture matches that search.</p>';
+  thumbnails.observe(catalogList);
 }
+const thumbnails = createFurnitureThumbnails(type => {
+  const def = CATALOG[type], group = new THREE.Group(); def.build(group, fin(def.fin), def.w, def.d); return group;
+});
+const categorySelect = document.getElementById('catalogCategory');
+CAT_ORDER.forEach(category => { const option = document.createElement('option'); option.value = option.textContent = category; categorySelect.append(option); });
+categorySelect.addEventListener('change', () => renderCatalog(document.getElementById('search').value));
 renderCatalog('');
 document.getElementById('search').addEventListener('input', e => renderCatalog(e.target.value));
 catalogList.addEventListener('click', e => {
   const btn = e.target.closest('.item-btn'); if (!btn) return;
-  const p = floorAtScreen(0.5, 0.5, true) || CENTER;
-  addItem(btn.dataset.type, p.x, p.z);
-  if (window.matchMedia('(max-width: 860px)').matches) toggleCatalog(false);
+  beginPlacement(btn.dataset.type);
 });
-catalogList.addEventListener('dragstart', e => {
-  const btn = e.target.closest('.item-btn'); if (!btn) return;
-  e.dataTransfer.setData('text/plain', btn.dataset.type); e.dataTransfer.effectAllowed = 'copy';
-});
-renderer.domElement.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-renderer.domElement.addEventListener('drop', e => {
-  e.preventDefault(); const type = e.dataTransfer.getData('text/plain'); if (!CATALOG[type]) return;
-  const r = renderer.domElement.getBoundingClientRect();
-  const p = floorAtScreen((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, false);
-  if (p) addItem(type, p.x, p.z);
-});
-function addItem(type, x, z) {
+function addItem(type, x, z, rot = 0) {
   const def = CATALOG[type]; pushUndo();
-  const it = { id: 'i' + state.nextId++, type, x: snap(x, 0.25), z: snap(z, 0.25), rot: 0, finish: def.fin };
+  const it = { id: 'i' + state.nextId++, type, x: snap(x, 0.25), z: snap(z, 0.25), rot, finish: def.fin };
   state.items.push(it); buildItem(it);
   if (!showFurniture) setFurniture(true);
   select({ kind: 'item', id: it.id }); save(); updateMeta();
@@ -1788,18 +1852,12 @@ function toggleCatalog(open) { catalogEl.classList.toggle('open', open); catalog
 catalogToggle.addEventListener('click', () => { toggleOpts(false); toggleCatalog(!catalogEl.classList.contains('open')); });
 const barEl = document.querySelector('.bar'), optsToggle = document.getElementById('optsToggle');
 function toggleOpts(open) { barEl.classList.toggle('opts-open', open); optsToggle.setAttribute('aria-expanded', String(open)); }
-optsToggle.addEventListener('click', () => { toggleCatalog(false); toggleMore(false); toggleOpts(!barEl.classList.contains('opts-open')); });
-const moreBtn = document.getElementById('moreBtn'), moreMenu = document.getElementById('moreMenu');
-function toggleMore(open) { moreMenu.classList.toggle('open', open); moreBtn.setAttribute('aria-expanded', String(open)); }
-moreBtn.addEventListener('click', () => { toggleOpts(false); toggleMore(!moreMenu.classList.contains('open')); });
-document.getElementById('keepBtn').addEventListener('click', () => setTimeout(() => toggleMore(false), 450));
+optsToggle.addEventListener('click', () => { toggleCatalog(false); toggleOpts(!barEl.classList.contains('opts-open')); });
 /* Popovers close when you press anywhere outside them, or Esc. */
 document.addEventListener('pointerdown', e => {
   if (!e.target.closest('#opts, #optsToggle')) toggleOpts(false);
-  if (!e.target.closest('#moreMenu, #moreBtn')) toggleMore(false);
-  if (!e.target.closest('#houseMenu, #houseBtn')) toggleHouseMenu(false);
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { toggleOpts(false); toggleMore(false); toggleHouseMenu(false); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { toggleOpts(false); } });
 /* Sliders show their filled part. */
 function paintRange(r) { const t = (r.value - r.min) / (r.max - r.min || 1); r.style.setProperty('--fill', (t * 100) + '%'); }
 function paintRanges() { document.querySelectorAll('input[type=range]').forEach(paintRange); }
@@ -1869,6 +1927,12 @@ document.getElementById('wallDone').addEventListener('click', () => { endWallCha
 let down = null, drag = null;
 const canvas = renderer.domElement;
 canvas.addEventListener('pointerdown', e => {
+  if (placement && e.button === 0) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    setNdc(e); const point = floorAtNdc(); if (point) movePlacement(point);
+    if (e.pointerType !== 'touch') confirmPlacement();
+    return;
+  }
   if (e.button !== 0 || view === 'walk' || browsing) return;
   setNdc(e); down = { x: e.clientX, y: e.clientY, hitSomething: false };
   if (mode === 'select') {
@@ -1928,6 +1992,7 @@ canvas.addEventListener('pointerdown', e => {
 }, { capture: true });
 
 canvas.addEventListener('pointermove', e => {
+  if (placement) { setNdc(e); const point = floorAtNdc(); if (point) movePlacement(point); return; }
   if (view === 'walk' || browsing) { if (browsing) canvas.style.cursor = ''; return; }
   setNdc(e);
   if (drag) {
@@ -1966,6 +2031,7 @@ const HINTS = {
   erase: 'Click a piece, door, window or wall to remove it.'
 };
 function setMode(m) {
+  cancelPlacement();
   mode = m; endWallChain(); cursorDot.visible = false; document.body.classList.toggle('tool-active', m !== 'select');
   document.querySelectorAll('#tools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   if (m !== 'select') select(null);
@@ -1991,6 +2057,7 @@ function applyControls() {
 let lastPlanView = 'iso';
 let browsing = false;
 function setBrowsing(on) {
+  cancelPlacement();
   browsing = on; document.body.classList.toggle('browsing', on);
   document.getElementById('browseBtn').setAttribute('aria-pressed', String(!on));
   if (on) { setMode('select'); select(null); toggleCatalog(false); }
@@ -2001,6 +2068,7 @@ function setBrowsing(on) {
 }
 document.getElementById('browseBtn').addEventListener('click', () => { toggleOpts(false); setBrowsing(!browsing); });
 function setView(v) {
+  cancelPlacement();
   const was = view; view = v;
   if (v !== 'walk') lastPlanView = v;
   document.querySelectorAll('#views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
@@ -2302,16 +2370,13 @@ function twoStep(btn, idleText, armedText, run) {
     clearTimeout(timer); armed = false; btn.textContent = idleText; btn.classList.remove('warn'); run();
   });
 }
-/* "Keep this layout" stores the current plan as your own baseline; "Reset to my flat" returns to it (or to the built-in layout if none is kept). */
+/* Preserve legacy kept baselines when resetting an arrangement. */
 const keepKey = () => STORE_KEY + '-kept' + (HOUSE().id === 'btm' ? '' : '-' + HOUSE().id);
 function keptLayout() { const k = storage.getItem(keepKey()); return k ? normalizeLayout(JSON.parse(k), CATALOG) : null; }
-document.getElementById('keepBtn').addEventListener('click', () => {
-  try { localStorage.setItem(keepKey(), serialize()); setStatus('Layout kept. "Reset to my flat" now brings back exactly this arrangement.'); }
-  catch (e) { setStatus('This browser would not store the layout, so Reset still uses the built-in one.'); }
-});
 const replaceLayout = createLayoutReplacer({
   catalog: CATALOG, repository: layoutRepository, getState: () => state, history: undoStack,
   apply(next) {
+    cancelPlacement();
     if (view === 'walk') setView(lastPlanView);
     setMode('select'); selection = null; state = next;
     resetWalkStart(); updateHouseUI();
@@ -2322,7 +2387,7 @@ const replaceLayout = createLayoutReplacer({
     saveFeedback('Saved on this device');
   }
 });
-twoStep(document.getElementById('resetBtn'), 'Reset to my flat', 'Tap again to reset', () => {
+twoStep(document.getElementById('resetBtn'), 'Reset arrangement', 'Tap again to reset', () => {
   try {
     const kept = keptLayout(); replaceLayout(kept || sampleState(HOUSE().id));
     setStatus((kept ? 'Back to your kept layout.' : 'Back to the built-in layout.') + ' Undo brings your changes back.');
@@ -2335,6 +2400,8 @@ twoStep(document.getElementById('blankBtn'), 'Blank sheet', 'Tap again to clear'
 
 mountSavedLayouts({
   store: createLayoutStore(storage, STORE_KEY + '-layouts', CATALOG),
+  getHouse: () => HOUSE().id,
+  onOpen: () => { cancelPlacement(); toggleOpts(false); },
   snapshot: () => JSON.parse(serialize()),
   openLayout: (layout, name) => {
     replaceLayout(layout);
@@ -2346,13 +2413,14 @@ mountSavedLayouts({
    (STORE_KEY-house-<id>) and brings back the other's, or its starting layout the first time. Undo goes back. */
 const houseStashKey = id => STORE_KEY + '-house-' + id;
 const houseBtn = document.getElementById('houseBtn'), houseMenu = document.getElementById('houseMenu');
-function toggleHouseMenu(open) { houseMenu.classList.toggle('open', open); houseBtn.setAttribute('aria-expanded', String(open)); }
 function updateHouseUI() {
   const current = HOUSE();
-  document.getElementById('houseSub').textContent = current.subtitle;
+  document.getElementById('houseTitle').textContent = current.name;
+  document.getElementById('houseSub').textContent = 'Homes & layouts';
+  document.getElementById('layoutsHouse').textContent = current.name;
   houseMenu.innerHTML = HOUSE_IDS.map(id => {
     const h = HOUSES[id], on = id === current.id;
-    return `<button class="menu-item house-item" type="button" role="menuitemradio" aria-checked="${on}" data-house="${id}">` +
+    return `<button class="menu-item house-item" type="button" aria-pressed="${on}" data-house="${id}">` +
       `<span><b>${h.name}</b><small>${h.place}</small></span>` +
       (on ? '<svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>' : '') + '</button>';
   }).join('');
@@ -2363,20 +2431,27 @@ function switchHouse(id) {
   try { storage.setItem(houseStashKey(from), serialize()); }
   catch (error) { saveFeedback('Could not set this house aside, so it stays open: ' + error.message, true); return; }
   let next = null;
-  try { const raw = storage.getItem(houseStashKey(id)); next = raw ? normalizeLayout(JSON.parse(raw), CATALOG) : null; } catch { next = null; }
+  try { const raw = storage.getItem(houseStashKey(id)); next = raw ? normalizeLayout(JSON.parse(raw), CATALOG) : null; } catch { saveFeedback('Could not read that home. Its saved arrangement has been preserved.', true); return; }
   try {
     replaceLayout(next || sampleState(id));
     setStatus(`${HOUSES[id].name}: ${next ? 'your arrangement' : 'starting layout'}. Undo goes back to ${HOUSES[from].name}.`);
   } catch (error) { saveFeedback('Could not open that house: ' + error.message, true); }
 }
-houseBtn.addEventListener('click', () => { toggleOpts(false); toggleMore(false); toggleHouseMenu(!houseMenu.classList.contains('open')); });
-houseMenu.addEventListener('click', e => { const b = e.target.closest('[data-house]'); if (b) { toggleHouseMenu(false); switchHouse(b.dataset.house); } });
+
+houseMenu.addEventListener('click', e => { const b = e.target.closest('[data-house]'); if (b) { switchHouse(b.dataset.house); document.getElementById('layoutsDialog').dispatchEvent(new Event('housechange')); houseMenu.querySelector('[aria-pressed="true"]')?.focus(); } });
 updateHouseUI();
 
 /* Keyboard */
 window.addEventListener('keydown', e => {
   if (document.getElementById('layoutsDialog').open || (e.target.closest && e.target.closest('input, textarea, select, #qiPanel'))) return;
   const k = e.key.toLowerCase();
+  if (placement) {
+    if (k === 'escape') { e.preventDefault(); cancelPlacement(); }
+    else if (k === 'r') { e.preventDefault(); rotatePlacement(); }
+    else if (k === 'enter') { e.preventDefault(); confirmPlacement(); }
+    else if (k.startsWith('arrow')) { e.preventDefault(); movePlacement({ x: placement.x + (k === 'arrowright' ? 0.25 : k === 'arrowleft' ? -0.25 : 0), z: placement.z + (k === 'arrowdown' ? 0.25 : k === 'arrowup' ? -0.25 : 0) }); }
+    return;
+  }
   if (view === 'walk') {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (k === 'escape') { setView(lastPlanView); return; }

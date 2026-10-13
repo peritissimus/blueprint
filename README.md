@@ -2,11 +2,11 @@
 
 A 2.5D floor-plan maker for the BTM 3BHK flat (east-facing entrance), built with Three.js and Vite.
 
-- Furniture catalogue with drag, turn, resize and finishes
+- Visual furniture catalogue with category filters and previews of the actual models
 - Feng Shui overlay: illustrative qi trails through doorways and around furniture, entrance selector, pause and speed controls; respects reduced motion. This geometric circulation aid is not a physical energy simulation or traditional Feng Shui assessment.
 - Two houses: BTM 3BHK (Bengaluru) and Hallmark Sunny Side 3BHK (Gandipet, Hyderabad). Switch from the app name; each keeps its own arrangement, sunlight and compass
-- Named saved layouts: save copies, reopen, rename, update and delete from the Layouts button
-- Wall, door and window drawing tools, undo, keep/reset layout
+- Homes & layouts: switch homes and save, reopen, rename, update or delete arrangements for each home
+- Wall, door and window drawing tools, undo and reset arrangement
 - Daylight that follows the sun's real path over Bengaluru by time of day and season, with soft shadows and bounce light
 - Illustrated (default) and Technical looks
 - 2.5D, Plan and Walk (eye-level) views; Browse mode for just looking around
@@ -59,3 +59,7 @@ The working layout and named copies use the same validation rules. Documents hav
 Unreadable autosave data is protected from automatic overwrites. An explicit replacement first copies it to the working storage key plus `-recovery`; if the backup or replacement cannot be written, the operation stops. Named copies are unchanged.
 
 Spatial calculations depend on layout geometry, not mesh construction or camera reveal. Lighting, walking and Qi consume the cached model. Scene invalidation distinguishes shadows, furniture and topology; persistence does not request redraws. Furniture factories, input handlers and lighting rendering still live in `main.js` and can be extracted incrementally.
+
+### Placing and editing furniture
+
+Choose a furniture card to preview it on the floor. Move the pointer (or tap the floor), rotate with R, and click or press Place to add it. Arrow keys move the preview in quarter-foot steps; Enter places it and Escape cancels without changing the arrangement. On touch screens, tap to position and use Place to confirm. Selecting a placed piece opens its controls, including exact position, available dimensions, rotation and finishes. Existing pieces can still be dragged.
