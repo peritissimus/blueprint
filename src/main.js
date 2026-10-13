@@ -22,6 +22,9 @@ const FINISHES = {
   sage:     { name: 'Sage',      hex: 0x98a68f },
   clay:     { name: 'Clay',      hex: 0xc58b6d }
 };
+const ILLUSTRATED_FINISHES = { oak: 0xdda65e, walnut: 0x965e43, wenge: 0x493b50, white: 0xfff6e3, charcoal: 0x394858, linen: 0xf2dfbd, sage: 0x78b6a3, clay: 0xdf8875 };
+const finishHex = key => look === 'illustrated' ? ILLUSTRATED_FINISHES[key] : FINISHES[key].hex;
+const colorCss = hex => '#' + hex.toString(16).padStart(6, '0');
 const FIN_CSS = { oak: '#c49a6c', walnut: '#6e4b34', wenge: '#3b2a20', white: '#f4f2ed', charcoal: '#3b3a38', linen: '#d8cfbf', sage: '#98a68f', clay: '#c58b6d' };
 
 /* ---------- The flat as drawn (sheet A-01) ---------- */
@@ -318,7 +321,7 @@ const MAT = {
   screen: mat(0x161718, { roughness: 0.25, metalness: 0.2 }),
   water: mat(0x9fb4bb, { roughness: 0.2 })
 };
-const fin = key => { const k = FINISHES[key] ? key : 'oak'; const s = FIN_SURFACE[k]; return texMat(FINISHES[k].hex, s[0], s[1], s[2]); };
+const fin = key => { const k = FINISHES[key] ? key : 'oak'; const s = FIN_SURFACE[k]; return texMat(finishHex(k), s[0], s[1], s[2]); };
 
 /* Floor textures drawn on canvas: 2 ft vitrified tiles for rooms, 1 ft matt tiles for wet areas. */
 function tileTexture(base, line, speck) {
@@ -334,7 +337,7 @@ function tileTexture(base, line, speck) {
 }
 const floorTex = tileTexture('#e9e5dd', 'rgba(70,60,45,0.16)', 'rgba(120,110,95,0.07)');
 floorTex.repeat.set(0.5, 0.5);
-const floorTexIllus = tileTexture('#efe4cf', 'rgba(125,95,60,0.24)', 'rgba(140,110,80,0.07)');
+const floorTexIllus = tileTexture('#fff0d5', 'rgba(128,115,133,0.17)', 'rgba(168,135,104,0.035)');
 floorTexIllus.repeat.set(0.5, 0.5);
 TEX.tile = canvasTex(256, (g, s) => {
   const n = 4, t = s / n;
@@ -1032,9 +1035,11 @@ const PAINTS = {
   slate:    { name: 'Slate',       hex: 0xb9bec3, css: '#b9bec3' },
   charcoal: { name: 'Charcoal',    hex: 0x5a5855, css: '#5a5855' }
 };
-/* Ink outlines for the illustrated look: every visible solid gets its creases drawn in brown ink. */
-const INK = new THREE.LineBasicMaterial({ color: 0x4a3828, transparent: true, opacity: 0.78 });
-const DIM_INK = new THREE.LineBasicMaterial({ color: 0x6b5440 });
+const ILLUSTRATED_PAINTS = { white: 0xfff3d9, putty: 0xe9d9ca, peach: 0xf6c2a4, terracotta: 0xd98c78, sage: 0xb6d8be, tile: 0xe5f1eb, slate: 0xb8cddd, charcoal: 0x536078 };
+const paintHex = key => look === 'illustrated' ? ILLUSTRATED_PAINTS[key] : PAINTS[key].hex;
+/* Ink outlines for the illustrated look: every visible solid gets its creases drawn in muted plum ink. */
+const INK = new THREE.LineBasicMaterial({ color: 0x54465c, transparent: true, opacity: 0.48 });
+const DIM_INK = new THREE.LineBasicMaterial({ color: 0x685c73 });
 const noRay = () => {};
 function inkify(root, angle) {
   if (look === 'technical' || !root) return;
@@ -1045,7 +1050,7 @@ function inkify(root, angle) {
     const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, angle || 30), INK); e.raycast = noRay; m.add(e);
   });
 }
-function capMat() { return look !== 'technical' ? mat(0xf7f0e3, { roughness: 0.9 }) : MAT.wallTop; }
+function capMat() { return look !== 'technical' ? mat(0xfff8e8, { roughness: 0.9 }) : MAT.wallTop; }
 const KIND_NAMES = { ext: 'Outer wall', int: 'Inner wall', railing: 'Balcony railing' };
 const itemObjs = new Map();
 let selHelper = null;
@@ -1107,9 +1112,10 @@ function wallHeight(w, f) {
 function wallThick(w) { return w.t || (w.kind === 'ext' ? 0.6 : 0.36); }
 function sideMat(w, wi) {
   if (selection && selection.kind === 'wall' && selection.idx === wi) return mat(0xe9c79a, { roughness: 0.9 });
-  const p = PAINTS[w.paint] || PAINTS.white;
+  const key = PAINTS[w.paint] ? w.paint : 'white';
+  const p = PAINTS[key], hex = paintHex(key);
   // plain matt paint; only the wall-tile finish carries a texture
-  return p.tex ? texMat(p.hex, p.tex, 0.5, 0.004) : mat(p.hex, { roughness: 0.95 });
+  return p.tex ? texMat(hex, p.tex, 0.5, 0.004) : mat(hex, { roughness: 0.95 });
 }
 /* Simple wall linework: ink only the outline of each wall's top, no vertical seams where wall pieces meet. */
 function inkTop(m) {
@@ -1615,7 +1621,7 @@ function renderInspectorBody() {
       html += `</div>`;
     }
     html += `<div class="row"><span class="label">Finish · ${FINISHES[it.finish] ? FINISHES[it.finish].name : ''}</span>` +
-      Object.keys(FINISHES).map(k => `<button class="swatch" type="button" data-fin="${k}" aria-label="${FINISHES[k].name}" aria-pressed="${it.finish === k}" style="background:${FIN_CSS[k]}"></button>`).join('') + `</div>`;
+      Object.keys(FINISHES).map(k => `<button class="swatch" type="button" data-fin="${k}" aria-label="${FINISHES[k].name}" aria-pressed="${it.finish === k}" style="background:${look === 'illustrated' ? colorCss(finishHex(k)) : FIN_CSS[k]}"></button>`).join('') + `</div>`;
     html += `<div class="row"><button class="mini" data-act="dup" type="button">Duplicate</button><button class="mini danger" data-act="del" type="button">Delete</button></div>`;
     inspector.innerHTML = html;
   } else if (selection.kind === 'wall') {
@@ -1627,7 +1633,7 @@ function renderInspectorBody() {
       html += `<div class="row"><span class="label">Height${reveal === 'down' ? ' · walls are down' : ''}</span><button class="mini" data-act="hMinus" type="button">Lower</button><button class="mini" data-act="hPlus" type="button">Higher</button><button class="mini" data-act="hAuto" type="button" aria-pressed="${w.h == null}">Follow reveal</button></div>`;
       html += `<div class="row"><span class="label">Thickness</span><button class="mini" data-act="tMinus" type="button">Thinner</button><button class="mini" data-act="tPlus" type="button">Thicker</button></div>`;
       html += `<div class="row"><span class="label">Paint · ${(PAINTS[w.paint] || PAINTS.white).name}</span>` +
-        Object.keys(PAINTS).map(k => `<button class="swatch" type="button" data-paint="${k}" aria-label="${PAINTS[k].name}" aria-pressed="${(w.paint || 'white') === k}" style="background:${PAINTS[k].css}"></button>`).join('') + `</div>`;
+        Object.keys(PAINTS).map(k => `<button class="swatch" type="button" data-paint="${k}" aria-label="${PAINTS[k].name}" aria-pressed="${(w.paint || 'white') === k}" style="background:${look === 'illustrated' ? colorCss(paintHex(k)) : PAINTS[k].css}"></button>`).join('') + `</div>`;
     }
     html += `<div class="row"><span class="label">Type</span>` + ['ext', 'int', 'railing'].map(k => `<button class="mini" type="button" data-kind="${k}" aria-pressed="${w.kind === k}">${KIND_NAMES[k]}</button>`).join('') + `</div>`;
     html += `<div class="row"><button class="mini danger" data-act="wdel" type="button">Delete wall</button></div>`;
@@ -2224,11 +2230,29 @@ winIn.addEventListener('input', () => {
 const bounceIn = document.getElementById('bounce'), bounceOut = document.getElementById('bounceOut');
 bounceIn.addEventListener('input', () => { bounceAmt = +bounceIn.value; bounceOut.textContent = bounceAmt.toFixed(1) + '×'; if (composeDaylight()) buildFloor(); });
 
-/* Look: Illustrated (warm paper, cream wall caps, ink outlines, dimensions) or Technical (black poché wall caps, no ink). */
+// Shared accent materials retain their original colours for Technical.
+const illustratedAccents = [
+  [MAT.leaf, 0x74ad78], [MAT.leaf2, 0x398477],
+  [MAT.doorWood, 0xc58a55], [MAT.doorWhite, 0xfff5df],
+  [MAT.glass, 0xa9dce5], [MAT.water, 0x83becd],
+  [PILLOWS[0], 0xf0bd65], [PILLOWS[1], 0xe98d80],
+  [PILLOWS[2], 0xfff0d3], [PILLOWS[3], 0x7ebbae],
+  [SEAT_PAD, 0xf5e5c8]
+].map(([material, color]) => ({ material, color, original: material.color.getHex() }));
+
+/* Look: Illustrated (anime palette, cream wall caps, ink outlines, dimensions) or Technical (black poché wall caps, no ink). */
 function applyLookChrome() {
   const ill = look !== 'technical';
-  renderer.setClearColor(ill ? 0xf1e9da : 0xe8e5de);
-  ground.material.color.set(ill ? 0xf0e7d6 : 0xe6e2da);
+  DIM_INK.color.setHex(ill ? 0x685c73 : 0x6b5440);
+  renderer.setClearColor(ill ? 0xedf2ec : 0xe8e5de);
+  ground.material.color.set(ill ? 0xf1f3e9 : 0xe6e2da);
+  hemi.color.set(ill ? 0xc7e1ff : 0xe9f0f5);
+  hemi.groundColor.set(ill ? 0xc7b5cc : 0xcfc6b6);
+  hemi.intensity = ill ? 0.62 : 0.46;
+  amb.color.set(ill ? 0xe1dcef : 0xffffff);
+  amb.intensity = ill ? 0.16 : 0.1;
+  fill.color.set(ill ? 0xffedce : 0xfff6ea);
+  illustratedAccents.forEach(({ material, color, original }) => material.color.setHex(ill ? color : original));
   document.querySelectorAll('#looks button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.look === look)));
   document.getElementById('toggleDims').setAttribute('aria-pressed', String(showDims));
   try { localStorage.setItem(STORE_KEY + '-look2', JSON.stringify({ look, dims: showDims })); } catch (e) { /* ignore */ }
