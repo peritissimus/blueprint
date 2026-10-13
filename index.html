@@ -44,6 +44,7 @@
       </div>
     </div>
     <div class="bar-divider wide-only"></div>
+    <button class="btn" id="layoutsBtn" type="button" aria-haspopup="dialog">Layouts</button>
     <button class="btn" id="optsToggle" type="button" aria-expanded="false" aria-controls="opts" aria-label="View and light settings"><svg class="i" viewBox="0 0 16 16"><path d="M2 4.5h7M12.5 4.5H14M2 11.5h1.5M7 11.5h7"/><circle cx="10.8" cy="4.5" r="1.7"/><circle cx="5.2" cy="11.5" r="1.7"/></svg><span class="long">View &amp; light</span></button>
     <div class="opts pop" id="opts" role="dialog" aria-label="View and light settings">
       <section class="opt-sec">
@@ -99,6 +100,16 @@
         <button type="button" data-view="top" aria-pressed="false">Plan</button>
         <button type="button" data-view="walk" aria-pressed="false" title="Walk through the flat at eye level">Walk</button>
       </div>
+      <button class="qi-toggle btn" id="qiToggle" type="button" aria-pressed="false" aria-controls="qiPanel">Feng Shui</button>
+      <section class="qi-panel glass" id="qiPanel" aria-labelledby="qiTitle" hidden>
+        <div class="qi-heading"><div><span class="qi-eyebrow">SPACE &amp; CIRCULATION</span><h2 id="qiTitle">Follow the flow</h2></div><button class="mini qi-details" id="qiDetails" type="button" aria-expanded="false">Details</button><button class="btn btn-icon" id="qiClose" type="button" aria-label="Close Feng Shui">✕</button></div>
+        <p class="qi-description">An illustrative qi flow based on open routes. A design aid, not a physical energy measurement or a traditional Feng Shui assessment.</p>
+        <label class="qi-entrance" for="qiEntrance">Start at <select id="qiEntrance" aria-label="Flow entrance"></select></label>
+        <p class="qi-summary" id="qiSummary" role="status" aria-live="polite">Finding open routes…</p>
+        <div class="qi-legend"><span><i class="qi-teal"></i>Connected routes</span><span><i class="qi-amber"></i>Near obstacles</span><span><i class="qi-rose"></i>Disconnected</span></div>
+        <div class="qi-controls"><button class="mini" id="qiPause" type="button" aria-pressed="true">Pause flow</button><label for="qiSpeed">Speed</label><input id="qiSpeed" type="range" min="0.25" max="2" step="0.25" value="1"><output id="qiSpeedOut" for="qiSpeed">1×</output></div>
+        <p class="qi-tip">Move furniture to explore different routes. Windows and walls block the model; doorways connect spaces.</p>
+      </section>
       <div class="hint-top glass" id="hintTop">Drag to orbit · right-drag to pan · scroll to zoom</div>
       <svg class="compass" viewBox="0 0 54 54" role="img" aria-label="Compass: the main door faces east"><circle cx="27" cy="27" r="24" fill="rgba(251,251,251,0.92)" stroke="#cfcfcf"></circle><g id="compassRose"><path d="M27 7 L31.5 27 L27 24.5 L22.5 27 Z" fill="#141414"></path><path d="M27 47 L31.5 27 L27 29.5 L22.5 27 Z" fill="#cfcfcf"></path><g font-family="IBM Plex Mono, monospace" font-size="7.5" font-weight="600" text-anchor="middle" fill="#6a6a6a"><text x="27" y="6.5" fill="#141414">N</text><text x="49" y="29.5">E</text><text x="27" y="52.5">S</text><text x="5" y="29.5">W</text></g></g></svg>
       <button class="walk-btn" id="walkBtn" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="2.6" r="1.4"/><path d="M8.6 5.4 6.8 9.2l2.4 1.6.6 4M8.6 5.4l2 2.4 2.2.6M6.8 9.2 5.6 14.4M8.6 5.4 6 6.4 4.8 8.6"/></svg><span>Leave walk</span></button>
@@ -111,6 +122,17 @@
     </section>
   </div>
 </div>
+<dialog id="layoutsDialog" class="layouts-dialog" aria-labelledby="layoutsTitle" aria-describedby="layoutsDescription">
+  <div class="layouts-heading"><h2 id="layoutsTitle">Saved layouts</h2><button class="btn btn-icon" id="closeLayouts" type="button" aria-label="Close saved layouts">✕</button></div>
+  <p id="layoutsDescription">Keep named copies of your arrangement. Stored only in this browser; clearing browser data removes them.</p>
+  <form id="saveLayoutForm" class="layout-save">
+    <label for="layoutName">Save current arrangement</label>
+    <div class="layout-name-row"><input id="layoutName" class="layout-input" placeholder="e.g. Open living room" maxlength="80" required autocomplete="off"><button class="btn btn-primary" type="submit">Save copy</button></div>
+  </form>
+  <p id="layoutsFeedback" class="layouts-feedback" role="status" aria-live="polite"></p>
+  <p class="layouts-help">Open replaces the working arrangement; Undo restores it. Update replaces a saved copy with your current arrangement.</p>
+  <ul id="layoutsList" class="layouts-list"></ul>
+</dialog>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
