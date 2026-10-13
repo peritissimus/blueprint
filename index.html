@@ -8,9 +8,32 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+body.booting { margin: 0; background: #f5f6f3; }
+body.booting .app { visibility: hidden; }
+.app-loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #f5f6f3; color: #26382d; font: 15px "IBM Plex Sans", sans-serif; }
+.app-loading[hidden] { display: none; }
+.loading-content { text-align: center; padding: 28px; max-width: 320px; }
+.loading-plan { width: 72px; height: 72px; margin-bottom: 20px; }
+.loading-plan path { stroke-dasharray: 180; animation: draw-plan 2.4s ease-in-out infinite; }
+.loading-content h1 { font-size: 24px; letter-spacing: -.6px; margin: 0 0 10px; }
+.loading-content p { color: #657068; line-height: 1.6; }
+.loading-content button { border: 0; border-radius: 8px; background: #26382d; color: white; padding: 12px 20px; font: inherit; cursor: pointer; }
+@keyframes draw-plan { 0% { stroke-dashoffset: 180; } 60%, 100% { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .loading-plan path { animation: none; } }
+</style>
 </head>
-<body>
-<div class="app">
+<body class="booting">
+<div class="app-loading" id="appLoading" role="status" aria-live="polite">
+  <div class="loading-content">
+    <svg class="loading-plan" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 8h48v48H8V8M8 32h24V8M32 32v24M44 32h12"/></svg>
+    <h1 id="loadingTitle">Opening your home</h1>
+    <p id="loadingMessage">Preparing your workspace and 3D view…</p>
+    <button id="loadingRetry" type="button" hidden>Try again</button>
+    <noscript><p>Enable JavaScript to open the floor-plan editor.</p></noscript>
+  </div>
+</div>
+<div class="app" inert aria-busy="true">
   <header class="bar">
     <div class="pop-wrap brand-wrap">
     <button class="brand" id="houseBtn" type="button" aria-haspopup="dialog" aria-controls="layoutsDialog" title="Homes & layouts" aria-label="Homes & layouts">
@@ -20,27 +43,16 @@
     </button>
 
     </div>
+
+    <div class="spacer"></div>
+
+    <div class="workspace-actions" role="group" aria-label="Workspace actions">
+    <button class="btn btn-quiet" id="optsToggle" type="button" aria-expanded="false" aria-controls="opts" aria-label="View and light settings"><svg class="i" viewBox="0 0 16 16"><path d="M2 4.5h7M12.5 4.5H14M2 11.5h1.5M7 11.5h7"/><circle cx="10.8" cy="4.5" r="1.7"/><circle cx="5.2" cy="11.5" r="1.7"/></svg><span class="long">View &amp; light</span></button>
     <button class="btn btn-primary browse-btn" id="browseBtn" type="button" title="Switch between just looking around and editing">
       <span class="off"><svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg><span class="long">Done editing</span><span class="short">Done</span></span>
       <span class="on"><svg class="i" viewBox="0 0 16 16"><path d="M10.5 2.5l3 3-8 8h-3v-3z"/><path d="M9 4l3 3"/></svg>Edit</span>
     </button>
-    <div class="bar-divider edit-divider"></div>
-    <div class="tools-group" role="group" aria-label="Tool">
-      <div class="seg" id="tools">
-        <button type="button" data-mode="select" aria-pressed="true"><svg class="i" viewBox="0 0 16 16"><path d="M3.5 2.5l8.5 5-3.8 1.1-1.9 3.6z"/></svg><span>Select</span><kbd>V</kbd></button>
-        <button type="button" data-mode="wall" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 13.5V3h3v10.5"/></svg><span>Wall</span><kbd>W</kbd></button>
-        <button type="button" data-mode="door" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h2.5M5 13.5V3.5M5 3.5a10 10 0 0 1 9 10"/></svg><span>Door</span><kbd>O</kbd></button>
-        <button type="button" data-mode="window" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 5.5h11v5h-11zM2.5 8h11"/></svg><span>Window</span><kbd>N</kbd></button>
-        <button type="button" data-mode="erase" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M6.5 13.5h7M3 10l6.2-6.2 4 4-5.7 5.7H6.5z"/><path d="M6.2 6.8l4 4"/></svg><span>Erase</span><kbd>X</kbd></button>
-      </div>
     </div>
-    <div class="spacer"></div>
-    <div class="edit-group" id="editGroup">
-      <button class="btn btn-icon btn-quiet" id="undoBtn" type="button" aria-label="Undo" title="Undo (Ctrl+Z)"><svg class="i" viewBox="0 0 16 16"><path d="M5.5 3.5L3 6l2.5 2.5"/><path d="M3 6h6.5a3.5 3.5 0 0 1 0 7H7"/></svg></button>
-    </div>
-    <div class="bar-divider wide-only"></div>
-
-    <button class="btn" id="optsToggle" type="button" aria-expanded="false" aria-controls="opts" aria-label="View and light settings"><svg class="i" viewBox="0 0 16 16"><path d="M2 4.5h7M12.5 4.5H14M2 11.5h1.5M7 11.5h7"/><circle cx="10.8" cy="4.5" r="1.7"/><circle cx="5.2" cy="11.5" r="1.7"/></svg><span class="long">View &amp; light</span></button>
     <div class="opts pop" id="opts" role="dialog" aria-label="View and light settings">
       <section class="opt-sec">
         <h4>Walls</h4>
@@ -90,19 +102,34 @@
     </aside>
 
     <section class="stage" id="stage">
+      <div class="editor-dock" role="toolbar" aria-label="Editing tools">
+      <button class="fab" id="catalogToggle" type="button" aria-label="Add furniture" aria-expanded="false"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>    <div class="tools-group" role="group" aria-label="Tool">
+      <div class="seg" id="tools">
+        <button type="button" data-mode="select" aria-pressed="true"><svg class="i" viewBox="0 0 16 16"><path d="M3.5 2.5l8.5 5-3.8 1.1-1.9 3.6z"/></svg><span>Select</span><kbd>V</kbd></button>
+        <button type="button" data-mode="wall" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 13.5V3h3v10.5"/></svg><span>Wall</span><kbd>W</kbd></button>
+        <button type="button" data-mode="door" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h2.5M5 13.5V3.5M5 3.5a10 10 0 0 1 9 10"/></svg><span>Door</span><kbd>O</kbd></button>
+        <button type="button" data-mode="window" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 5.5h11v5h-11zM2.5 8h11"/></svg><span>Window</span><kbd>N</kbd></button>
+        <button type="button" data-mode="erase" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M6.5 13.5h7M3 10l6.2-6.2 4 4-5.7 5.7H6.5z"/><path d="M6.2 6.8l4 4"/></svg><span>Erase</span><kbd>X</kbd></button>
+      </div>
+    </div>
+    <div class="edit-group" id="editGroup">
+      <button class="btn btn-icon btn-quiet" id="undoBtn" type="button" aria-label="Undo" title="Undo (Ctrl+Z)"><svg class="i" viewBox="0 0 16 16"><path d="M5.5 3.5L3 6l2.5 2.5"/><path d="M3 6h6.5a3.5 3.5 0 0 1 0 7H7"/></svg></button>
+    </div>
+      </div>
       <div id="placementBar" class="placement-bar glass" hidden role="region" aria-label="Place furniture">
         <div><strong id="placementName"></strong><span id="placementHint" role="status"></span></div>
         <button class="btn" id="placementRotate" type="button" aria-label="Rotate preview">Rotate ↻</button>
         <button class="btn btn-primary" id="placementConfirm" type="button">Place</button>
         <button class="btn" id="placementCancel" type="button">Cancel</button>
       </div>
-      <div class="loading" id="loading">Loading 3D view…</div>
+      <div class="canvas-navigation" aria-label="Canvas controls">
       <div class="seg view-pill" id="views" role="group" aria-label="View">
         <button type="button" data-view="iso" aria-pressed="true">3D</button>
         <button type="button" data-view="top" aria-pressed="false">Plan</button>
         <button type="button" data-view="walk" aria-pressed="false" title="Walk through the flat at eye level">Walk</button>
       </div>
       <button class="qi-toggle btn" id="qiToggle" type="button" aria-pressed="false" aria-controls="qiPanel">Feng Shui</button>
+      </div>
       <section class="qi-panel glass" id="qiPanel" aria-labelledby="qiTitle" hidden>
         <div class="qi-heading"><div><span class="qi-eyebrow">SPACE &amp; CIRCULATION</span><h2 id="qiTitle">Follow the flow</h2></div><button class="mini qi-details" id="qiDetails" type="button" aria-expanded="false">Details</button><button class="btn btn-icon" id="qiClose" type="button" aria-label="Close Feng Shui">✕</button></div>
         <p class="qi-description">An illustrative qi flow based on open routes. A design aid, not a physical energy measurement or a traditional Feng Shui assessment.</p>
@@ -121,7 +148,7 @@
       <div class="status glass" id="status"><span id="statusText">Select a piece to move it. Drag empty floor to orbit.</span><span class="meta" id="statusMeta"></span><span class="meta" id="saveStatus" role="status" aria-live="polite"></span></div>
       <p id="saveError" class="save-error-notice glass" role="alert" hidden></p>
       <div class="inspector" id="inspector" hidden></div>
-      <button class="fab" id="catalogToggle" type="button" aria-label="Add furniture" aria-expanded="false"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
+
     </section>
   </div>
 </div>
@@ -144,6 +171,6 @@
         </div></details>
   <p class="local-note">Saved on this device. Clearing browser data removes your arrangements.</p>
 </dialog>
-<script type="module" src="/src/main.js"></script>
+<script type="module" src="/src/boot.js"></script>
 </body>
 </html>

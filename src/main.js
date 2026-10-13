@@ -206,7 +206,7 @@ function disposeGeometries(root) {
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(0xe8e5de);
 stage.insertBefore(renderer.domElement, stage.firstChild);
-document.getElementById('loading').remove();
+
 
 const scene = new THREE.Scene();
 const CENTER = new THREE.Vector3(17.5, 0, 19.5);
@@ -1848,7 +1848,7 @@ function addItem(type, x, z, rot = 0) {
 }
 const catalogEl = document.getElementById('catalog');
 const catalogToggle = document.getElementById('catalogToggle');
-function toggleCatalog(open) { catalogEl.classList.toggle('open', open); catalogToggle.setAttribute('aria-expanded', String(open)); }
+function toggleCatalog(open) { document.body.classList.toggle('catalog-open', open); catalogEl.classList.toggle('open', open); catalogToggle.setAttribute('aria-expanded', String(open)); }
 catalogToggle.addEventListener('click', () => { toggleOpts(false); toggleCatalog(!catalogEl.classList.contains('open')); });
 const barEl = document.querySelector('.bar'), optsToggle = document.getElementById('optsToggle');
 function toggleOpts(open) { barEl.classList.toggle('opts-open', open); optsToggle.setAttribute('aria-expanded', String(open)); }
@@ -2093,7 +2093,8 @@ function fitView() {
     v.set(x, y, z).applyMatrix4(inv); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
   }
   const narrow = window.matchMedia('(max-width: 860px)').matches;
-  const top = 52, bottom = narrow && document.body.classList.contains('qi-active') ? (browsing ? 160 : 230) : narrow && !browsing ? 92 : (narrow ? 16 : 70);
+  const top = narrow && document.body.classList.contains('qi-active') ? 210 : 70;
+  const bottom = browsing ? 64 : 96;
   const vw = camera.right - camera.left, vh = camera.top - camera.bottom;
   const zoom = Math.max(controls.minZoom, Math.min(controls.maxZoom, Math.min((vw * 0.97) / (x1 - x0), (vh * (1 - (top + bottom) / sh)) / (y1 - y0))));
   const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
