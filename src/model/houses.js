@@ -7,7 +7,6 @@ const P = (x, y) => [+((x - 70) / 26).toFixed(3), +((y - 70) / 26).toFixed(3)];
 const btm = {
   id: 'btm',
   name: 'BTM 3BHK',
-  place: 'Bengaluru',
   subtitle: 'BTM 3BHK · east entrance',
   // The main door faces east, which is the top edge of the plan, so north is to the plan's left.
   east: [0, -1], north: [-1, 0],
@@ -28,8 +27,7 @@ const btm = {
 const X = 30.83, Z = 32.94;
 const sunny = {
   id: 'sunny',
-  name: 'Hallmark Sunny Side',
-  place: 'Gandipet, Hyderabad',
+  name: 'Sunny Side',
   subtitle: 'Sunny Side 3BHK · 1345 sq ft',
   east: [1, 0], north: [0, -1],
   lat: 17.39, solarNoon: 12.27,
@@ -66,7 +64,8 @@ const sunny = {
       { type: 'double', a: [4.73, 13.2], b: [4.73, 17.2], hinge: 0, swing: [-1, 0] },   // sit-out
       Wn([4, 0], [9, 0]), Wn([22.5, 0], [27.5, 0]), Wn([14.5, 0], [16.6, 0], 6),
       Wn([10.5, Z], [13.0, Z]), Wn([16.4, Z], [18.0, Z], 6), Wn([21.0, Z], [30.0, Z]),
-      Wn([X, 21.9], [X, 24.6]), Wn([X, 17.6], [X, 20.3])
+      Wn([X, 21.9], [X, 24.6]), Wn([X, 17.6], [X, 20.3]),
+      Wn([0, 7.13], [0, 9.63]), Wn([0, 22.44], [0, 26.44]) // left bedroom windows
     ];
     const R = Math.PI, H = Math.PI / 2;
     let n = 0;
@@ -74,7 +73,7 @@ const sunny = {
     const items = [
       // Guest bedroom
       I('queenBed', 7.1, 6.85, R, 'oak'), I('bedside', 3.8, 9.55, R, 'oak'), I('bedside', 10.4, 9.55, R, 'oak'),
-      I('wardrobe', 1.3, 3.9, H, 'walnut', { w: 6.5 }),
+      I('wardrobe', 1.3, 3.7, H, 'walnut', { w: 6.5 }),
       // Common toilet
       I('shower', 16.0, 1.75, 0, 'white', { w: 3.4, d: 2.6 }), I('wc', 17.25, 4.6, -H), I('basin', 14.1, 4.7, H, 'white'),
       // Children's bedroom
@@ -92,7 +91,7 @@ const sunny = {
       I('swing', 2.45, 13.0, H), I('plant', 1.2, 19.9, 0, 'clay'), I('plant', 3.7, 20.1, 0, 'white'),
       // Master bedroom
       I('kingBed', 7.0, 29.15, R, 'oak'), I('bedside', 3.25, 31.9, R, 'oak'), I('bedside', 10.75, 31.9, R, 'oak'),
-      I('wardrobe', 1.3, 26.6, H, 'walnut', { w: 8.5 }),
+      I('wardrobe', 5.4, 22.35, 0, 'walnut', { w: 8.5 }),
       // Lobby basin and attached toilet
       I('basin', 14.95, 22.8, H, 'white'),
       I('shower', 18.0, 26.2, 0, 'white', { w: 2.8, d: 2.8 }), I('wc', 15.6, 31.9, R), I('basin', 18.75, 30.0, -H, 'white'),

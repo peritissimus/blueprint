@@ -73,7 +73,7 @@ function btmTemplate() {
     I('wardrobe', 29.15, 11.45, R, 'walnut', { w: 11.4 }),
     ...studyItems(I),
     // Bedroom 3
-    I('queenBed', 16.55, 30.6, H, 'oak'), I('bedside', 13.85, 27.4, H, 'oak'), I('bedside', 13.85, 33.8, H, 'oak'),
+    I('queenBed', 14.6, 30.6, H, 'oak'), I('bedside', 11.9, 27.4, H, 'oak'), I('bedside', 11.9, 33.8, H, 'oak'),
     I('wardrobe', 14.97, 37.92, R, 'walnut', { w: 7.75 }),
     // Foyer, living, puja
     I('shoeRack', 11.75, 5.9, H, 'white'), ...foyerItems(I),
@@ -1639,7 +1639,7 @@ function renderInspectorBody() {
     let html = `<div><h2>${def.name}</h2><div class="dims">${fmt(w)} × ${fmt(d)} ft · at ${fmt(it.x)}, ${fmt(it.z)} · ${((deg % 360) + 360) % 360}°</div></div>`;
     html += `<div class="row"><span class="label">Turn</span><button class="mini" data-act="rotL" type="button" aria-label="Turn left 90 degrees">⟲ 90°</button><button class="mini" data-act="rot15L" type="button">−15°</button><button class="mini" data-act="rot15R" type="button">+15°</button><button class="mini" data-act="rotR" type="button" aria-label="Turn right 90 degrees">90° ⟳</button></div>`;
     const measure = (key, label, value, min, max, step) => `<label>${label}<input type="number" data-measure="${key}" aria-label="${label}" value="${Math.round(value * 1000) / 1000}" min="${min}" max="${max}" step="${step}"></label>`;
-    html += '<div class="object-measures">' + measure('x', 'Position X (ft)', it.x, -1000, 1000, 0.25) + measure('z', 'Position Z (ft)', it.z, -1000, 1000, 0.25);
+    html += '<div class="object-measures">' + measure('x', 'Position X (ft)', it.x, -1000, 1000, 0.01) + measure('z', 'Position Z (ft)', it.z, -1000, 1000, 0.01);
     if (def.resize) html += measure('w', 'Width (ft)', w, 1, 30, 0.5);
     if (def.resize === 'wd') html += measure('d', 'Depth (ft)', d, 1, 30, 0.5);
     html += '</div>';
@@ -2422,7 +2422,7 @@ function updateHouseUI() {
   houseMenu.innerHTML = HOUSE_IDS.map(id => {
     const h = HOUSES[id], on = id === current.id;
     return `<button class="menu-item house-item" type="button" aria-pressed="${on}" data-house="${id}">` +
-      `<span><b>${h.name}</b><small>${h.place}</small></span>` +
+      `<span><b>${h.name}</b></span>` +
       (on ? '<svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>' : '') + '</button>';
   }).join('');
 }
