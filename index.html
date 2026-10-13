@@ -116,7 +116,8 @@
       <div class="joy" id="joy" aria-label="Walk joystick"><i></i></div>
       <div class="crosshair"></div>
       <button class="wall-done" id="wallDone" type="button" hidden>Done with this wall</button>
-      <div class="status glass" id="status"><span id="statusText">Select a piece to move it. Drag empty floor to orbit.</span><span class="meta" id="statusMeta"></span></div>
+      <div class="status glass" id="status"><span id="statusText">Select a piece to move it. Drag empty floor to orbit.</span><span class="meta" id="statusMeta"></span><span class="meta" id="saveStatus" role="status" aria-live="polite"></span></div>
+      <p id="saveError" class="save-error-notice glass" role="alert" hidden></p>
       <div class="inspector" id="inspector" hidden></div>
       <button class="fab" id="catalogToggle" type="button" aria-label="Add furniture" aria-expanded="false"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
     </section>

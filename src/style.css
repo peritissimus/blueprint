@@ -351,3 +351,6 @@ body.qi-active .status { display: none !important; }
   .qi-panel.qi-collapsed .qi-controls label, .qi-panel.qi-collapsed .qi-controls input, .qi-panel.qi-collapsed .qi-controls output { display: none; }
   .qi-panel.qi-collapsed .qi-controls { margin-top: 8px; }
 }
+
+.save-error-notice { position: fixed; z-index: 40; top: 68px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 12px; color: #a13d32; font-size: 13px; }
+.save-error-notice[hidden] { display: none; }

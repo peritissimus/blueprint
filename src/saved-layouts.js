@@ -1,12 +1,15 @@
+import { validLayout } from './model/layout.js';
+export { validLayout } from './model/layout.js';
+
 // Named snapshots are separate from the editor's working autosave.
-export function createLayoutStore(storage, key) {
+export function createLayoutStore(storage, key, catalog) {
   const read = () => {
     const raw = storage.getItem(key);
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (data.version !== 1 || !Array.isArray(data.layouts) || data.layouts.some(entry =>
       !entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' ||
-      !Number.isFinite(entry.updatedAt) || !validLayout(entry.layout))) {
+      !Number.isFinite(entry.updatedAt) || !validLayout(entry.layout, catalog))) {
       throw new Error('Saved layouts could not be read. Existing data has been preserved.');
     }
     return data.layouts;
@@ -21,7 +24,7 @@ export function createLayoutStore(storage, key) {
     list: read,
     save(name, layout, id) {
       name = nameOf(name);
-      if (!validLayout(layout)) throw new Error('This layout cannot be saved.');
+      if (!validLayout(layout, catalog)) throw new Error('This layout cannot be saved.');
       const entries = read();
       if (entries.some(entry => entry.id !== id && entry.name.toLowerCase() === name.toLowerCase())) {
         throw new Error('That name is already used. Choose another name or update the existing layout.');
@@ -38,17 +41,6 @@ export function createLayoutStore(storage, key) {
     },
     remove(id) { write(read().filter(entry => entry.id !== id)); }
   };
-}
-
-export function validLayout(layout) {
-  const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
-  return !!layout && typeof layout.baseFloor === 'boolean' && Number.isInteger(layout.nextId) && layout.nextId > 0 &&
-    Array.isArray(layout.walls) && layout.walls.every(w => w && point(w.a) && point(w.b)) &&
-    Array.isArray(layout.openings) && layout.openings.every(o => o && point(o.a) && point(o.b) &&
-      ['door', 'double', 'window'].includes(o.type) && (o.type === 'window' || point(o.swing))) &&
-    Array.isArray(layout.items) && layout.items.every(i => i && typeof i.id === 'string' && typeof i.type === 'string' &&
-      Number.isFinite(i.x) && Number.isFinite(i.z) && Number.isFinite(i.rot ?? 0)) &&
-    Array.isArray(layout.labels) && layout.labels.every(l => l && typeof l.text === 'string' && point(l.p));
 }
 
 export function mountSavedLayouts({ store, snapshot, openLayout }) {

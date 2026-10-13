@@ -1,3 +1,7 @@
+import { normalizeLayout, blankLayout } from './model/layout.js';
+import { createSpatialCache, matchOpening } from './model/spatial.js';
+import { createLayoutRepository } from './storage/layout-repository.js';
+import { createLayoutReplacer } from './editor/replace-layout.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './style.css';
@@ -108,7 +112,6 @@ function studyItems(I) {
 /* Foyer: helmets and keys on the wall above the shoe cabinet, a shoe bench next to it, a slatted partition
    screening the living room from the door, and a mat inside the main door. The right-hand side stays clear
    for the main door to swing open. */
-function state0HasFoyer(s) { return s.items.some(it => ['helmetRack', 'shoeBench', 'slatPartition'].includes(it.type)); }
 function foyerItems(I) {
   const H = Math.PI / 2;
   return [
@@ -117,31 +120,6 @@ function foyerItems(I) {
     I('slatPartition', 12.95, 10.75, 0, 'oak', { w: 3.5 }),
     I('doormat', 18.2, 4.6, 0, 'clay', { w: 3, d: 1.8 })
   ];
-}
-/* Older saved plans: swap the old Bedroom 2 furniture for the study set, keeping everything else. */
-function migrate(s) {
-  s.migrations = s.migrations || {};
-  if (!s.migrations.study2) {
-    s.items = s.items.filter(it => !(it.type !== 'wardrobe' && it.x > 20.1 && it.x < 35 && it.z > 0.2 && it.z < 10.4));
-    let n = s.nextId || (s.items.length + 100);
-    const I = (type, x, z, rot, finish, extra) => Object.assign({ id: 'i' + (n++), type, x, z, rot: rot || 0, finish: finish || CATALOG[type].fin }, extra || {});
-    s.items.push(...studyItems(I));
-    s.nextId = n;
-    (s.labels || []).forEach(l => { if (l.text === 'BEDROOM 2') l.text = 'STUDY'; });
-    s.migrations.study2 = true;
-  }
-  if (!s.migrations.tvWall) {
-    // the TV unit now matches the photo: dark wenge wall unit, 5 ft wide, flush to the wall it backs onto
-    s.items.forEach(it => { if (it.type === 'tvUnit') { if (it.finish === 'walnut') it.finish = 'wenge'; delete it.w; } });
-    s.migrations.tvWall = true;
-  }
-  if (!s.migrations.foyer1) {
-    let n = s.nextId || (s.items.length + 100);
-    const I = (type, x, z, rot, finish, extra) => Object.assign({ id: 'i' + (n++), type, x, z, rot: rot || 0, finish: finish || CATALOG[type].fin }, extra || {});
-    if (state0HasFoyer(s)) { /* already furnished by hand */ } else s.items.push(...foyerItems(I));
-    s.nextId = n; s.migrations.foyer1 = true;
-  }
-  return s;
 }
 const FOOTPRINT = [[356,161],[590,161],[590,70],[980,70],[980,1084],[70,1084],[70,408],[356,408]].map(([x, y]) => P(x, y));
 const WET = [[200,928,356,1084],[655,785,785,1019],[655,1019,980,1084],[902,395,980,707]].map(([x1, y1, x2, y2]) => [P(x1, y1), P(x2, y2)]);
@@ -201,16 +179,14 @@ renderer.shadowMap.enabled = true;
 // Shadows depend on geometry and sunlight, not on the camera or the Qi animation.
 renderer.shadowMap.autoUpdate = false;
 let renderDirty = true, sceneRevision = 0, furnitureShadowsDirty = true;
-function invalidate(shadows = false) {
+function invalidate({ shadows = false, furniture = false, layout = false } = {}) {
   renderDirty = true;
-  if (shadows) {
-    renderer.shadowMap.needsUpdate = true;
-    furnitureShadowsDirty = true;
-    sceneRevision++;
-  }
+  if (shadows) renderer.shadowMap.needsUpdate = true;
+  if (furniture) furnitureShadowsDirty = true;
+  if (layout || furniture) sceneRevision++;
 }
 // UI mutations run synchronously; draw their result on the next animation frame.
-for (const event of ['click', 'input', 'change', 'keydown', 'pointerdown', 'pointerup', 'pointermove']) {
+for (const event of ['click', 'input', 'change', 'keydown', 'pointerdown', 'pointerup']) {
   document.addEventListener(event, () => invalidate(), { passive: true });
 }
 document.addEventListener('visibilitychange', () => invalidate());
@@ -384,7 +360,6 @@ const structureRoot = new THREE.Group(); scene.add(structureRoot);
    so direct sun can only reach the inside through windows, glass doors and the open balcony side. */
 const proxyRoot = new THREE.Group(); scene.add(proxyRoot);
 const PROXY = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
-let lightGeo = { occ: [], src: [] };
 const itemsRoot = new THREE.Group(); scene.add(itemsRoot);
 const labelsRoot = new THREE.Group(); scene.add(labelsRoot);
 const floorRoot = new THREE.Group(); scene.add(floorRoot);
@@ -1043,7 +1018,10 @@ const CATALOG = {
 const CAT_ORDER = ['Foyer', 'Bedroom', 'Living', 'Dining', 'Kitchen', 'Bath & utility', 'Balcony & puja'];
 
 /* ---------- State ---------- */
-let state = loadState() || sampleState();
+const storage = { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) };
+const layoutRepository = createLayoutRepository(storage, STORE_KEY, CATALOG);
+let loadWarning = '';
+let state = loadState() || normalizeLayout(sampleState(), CATALOG);
 let undoStack = [];
 let mode = 'select', view = 'iso';
 let wallH = 6.5, fullH = 10, reveal = 'low', showLabels = true, showFurniture = true;
@@ -1080,24 +1058,27 @@ const KIND_NAMES = { ext: 'Outer wall', int: 'Inner wall', railing: 'Balcony rai
 const itemObjs = new Map();
 let selHelper = null;
 
-function serialize() { return JSON.stringify({ walls: state.walls, openings: state.openings, items: state.items, labels: state.labels, baseFloor: state.baseFloor, nextId: state.nextId, migrations: { study2: true, tvWall: true, foyer1: true } }); }
+function serialize() { return JSON.stringify(normalizeLayout(state, CATALOG)); }
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!Array.isArray(s.walls) || !Array.isArray(s.items)) return null;
-    s.items = s.items.filter(it => CATALOG[it.type]);
-    return migrate(s);
-  } catch (e) { return null; }
+  try { return layoutRepository.read(); }
+  catch { loadWarning = 'Existing layout could not be read. It is preserved; open a saved layout or reset to recover.'; return null; }
 }
-function save() { invalidate(true); try { localStorage.setItem(STORE_KEY, serialize()); } catch (e) { /* storage unavailable: keep working in memory */ } }
+function saveFeedback(message, failed = false) {
+  const output = document.getElementById('saveStatus');
+  output.textContent = failed ? '' : message;
+  const error = document.getElementById('saveError');
+  error.textContent = failed ? message : ''; error.hidden = !failed;
+}
+function save() {
+  try { layoutRepository.write(state); saveFeedback('Saved on this device'); }
+  catch (error) { saveFeedback('Not saved: ' + error.message, true); }
+}
 function pushUndo(snapshot) { undoStack.push(snapshot || serialize()); if (undoStack.length > 80) undoStack.shift(); }
 function undo() {
-  const prev = undoStack.pop();
+  const prev = undoStack.at(-1);
   if (!prev) { setStatus('Nothing to undo.'); return; }
-  state = JSON.parse(prev);
-  selection = null; rebuildAll(); save(); setStatus('Undone.');
+  try { replaceLayout(JSON.parse(prev), { undo: true }); setStatus('Undone.'); }
+  catch (error) { saveFeedback('Could not undo: ' + error.message, true); }
 }
 
 /* ---------- Structure: floor, walls, openings ---------- */
@@ -1107,16 +1088,10 @@ function wallFrame(w) {
   return { A, B, dir, L, n: new THREE.Vector2(-dir.y, dir.x) };
 }
 function matchWall(op) {
-  for (let i = 0; i < state.walls.length; i++) {
-    const w = state.walls[i]; if (w.kind === 'railing') continue;
-    const f = wallFrame(w); if (f.L < 0.01) continue;
-    const ta = V2(op.a).sub(f.A), tb = V2(op.b).sub(f.A);
-    const da = Math.abs(ta.x * f.n.x + ta.y * f.n.y), db = Math.abs(tb.x * f.n.x + tb.y * f.n.y);
-    const pa = ta.dot(f.dir), pb = tb.dot(f.dir);
-    if (da < 0.3 && db < 0.3 && Math.min(pa, pb) > -0.05 && Math.max(pa, pb) < f.L + 0.05) return { i, t0: Math.min(pa, pb), t1: Math.max(pa, pb), f };
-  }
-  return null;
+  const match = matchOpening(state.walls, op);
+  return match ? { ...match, f: wallFrame(state.walls[match.i]) } : null;
 }
+const spatialModel = createSpatialCache();
 /* Wall reveal: how tall each wall is drawn. A height set on the wall itself wins, except in "Down". */
 const camXZ = () => new THREE.Vector2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
 function isFarWall(f) {
@@ -1214,6 +1189,7 @@ function inPoly(x, z, poly) {
   return inside;
 }
 function bakeDaylight() {
+  const lightGeo = spatialModel(state).light;
   const box = wallsBox(); if (!box) { daylightTex = null; return; }
   const [minX, minZ, maxX, maxZ] = box; const res = 0.3;
   const W = Math.max(2, Math.ceil((maxX - minX) / res)), H = Math.max(2, Math.ceil((maxZ - minZ) / res));
@@ -1444,6 +1420,7 @@ function buildFloor() {
 }
 let relightTimer = null, lastLightKey = '';
 function scheduleRelight(delay) {
+  const lightGeo = spatialModel(state).light;
   // the bake depends only on walls, openings and the floor outline, not on how walls are revealed
   const key = JSON.stringify(lightGeo) + '|' + state.baseFloor + '|' + sunKey;
   if (key === lastLightKey && floorRoot.children.length) return;
@@ -1457,18 +1434,17 @@ function proxyPiece(f, t0, t1, y0, y1, thick) {
   m.position.set(mid.x, (y0 + y1) / 2, mid.y); m.rotation.y = Math.atan2(-f.dir.y, f.dir.x); m.castShadow = true;
   proxyRoot.add(m);
 }
-const ptAt = (f, t) => { const p = f.A.clone().add(f.dir.clone().multiplyScalar(t)); return [p.x, p.y]; };
 
-let walkSegs = [];
+let renderedSpatial = null;
 const CEILING = new THREE.MeshStandardMaterial({ color: 0xf6f3ec, roughness: 1, emissive: 0xe9e3d6, emissiveIntensity: 0.42 });
 function buildStructure() {
-  invalidate(true);
   disposeGeometries(structureRoot); disposeGeometries(proxyRoot);
   structureRoot.clear(); proxyRoot.clear();
-  lightGeo = { occ: [], src: [] }; walkSegs = [];
+  const spatial = spatialModel(state);
+  invalidate({ shadows: true, layout: spatial !== renderedSpatial });
+  renderedSpatial = spatial;
   const ceil = fullH;
-  const perWall = state.walls.map(() => []);
-  state.openings.forEach((op, idx) => { const m = matchWall(op); if (m) perWall[m.i].push({ op, idx, t0: m.t0, t1: m.t1 }); });
+  const perWall = spatial.perWall;
   state.walls.forEach((w, wi) => {
     const f = wallFrame(w); if (f.L < 0.05) return;
     const ud = { wallIdx: wi };
@@ -1476,20 +1452,18 @@ function buildStructure() {
       orientedBox(structureRoot, MAT.showerGlass, f.A, f.B, 0.08, 0, 3.3, ud);
       orientedBox(structureRoot, MAT.metal, f.A, f.B, 0.16, 3.3, 0.12, ud);
       proxyPiece(f, 0, f.L, 0, 3.3, 0.1);
-      lightGeo.src.push([w.a, w.b]); walkSegs.push([ptAt(f, 0), ptAt(f, f.L), 0.2]);
       return;
     }
     const thick = wallThick(w);
     const wh = wallHeight(w, f);
     const side = sideMat(w, wi);
-    const ops = perWall[wi].sort((a, b) => a.t0 - b.t0);
+    const ops = perWall[wi];
     let cursor = 0;
-    const solid = (t0, t1) => { if (t1 - t0 < 0.01) return; proxyPiece(f, t0, t1, 0, ceil, thick); lightGeo.occ.push([ptAt(f, t0), ptAt(f, t1)]); walkSegs.push([ptAt(f, t0), ptAt(f, t1), thick]); };
+    const solid = (t0, t1) => { if (t1 - t0 < 0.01) return; proxyPiece(f, t0, t1, 0, ceil, thick); };
     ops.forEach(o => {
       if (o.t0 > cursor) { wallPiece(structureRoot, f, cursor, o.t0, 0, wh, thick, ud, cursor === 0, false, side); solid(cursor, o.t0); }
       const oud = { openingIdx: o.idx, wallIdx: wi };
-      if (o.op.type === 'window' || o.op.type === 'double') lightGeo.src.push([ptAt(f, o.t0), ptAt(f, o.t1)]);
-      if (o.op.type === 'window') { const sl = o.op.sill == null ? 3 : o.op.sill; proxyPiece(f, o.t0, o.t1, 0, sl, thick); walkSegs.push([ptAt(f, o.t0), ptAt(f, o.t1), thick]); }
+      if (o.op.type === 'window') { const sl = o.op.sill == null ? 3 : o.op.sill; proxyPiece(f, o.t0, o.t1, 0, sl, thick); }
       proxyPiece(f, o.t0, o.t1, DOOR_HEAD, ceil, thick);
       if (o.op.type === 'window') {
         const sill = o.op.sill == null ? 3 : o.op.sill;
@@ -1600,7 +1574,7 @@ function buildLabels() {
 /* ---------- Furniture ---------- */
 function dims(it) { const d = CATALOG[it.type]; return { w: it.w || d.w, d: it.d || d.d }; }
 function buildItem(it) {
-  invalidate(true);
+  invalidate({ shadows: true, furniture: true });
   const old = itemObjs.get(it.id); if (old) { disposeGeometries(old); itemsRoot.remove(old); }
   const def = CATALOG[it.type]; const g = new THREE.Group(); const { w, d } = dims(it);
   def.build(g, fin(it.finish || def.fin), w, d);
@@ -1737,6 +1711,7 @@ function itemAction(act) {
   buildItem(it); refreshSelection(); save();
 }
 function deleteItem(id) {
+  invalidate({ shadows: true, furniture: true });
   const it = itemById(id); if (!it) return;
   state.items = state.items.filter(i => i.id !== id);
   const obj = itemObjs.get(id); if (obj) { disposeGeometries(obj); itemsRoot.remove(obj); } itemObjs.delete(id);
@@ -1870,6 +1845,7 @@ function snapPoint(p, from, free) {
   return [x, z];
 }
 function updateWallPreview(p, shift) {
+  invalidate();
   const q = snapPoint(p, wallStart, shift);
   cursorDot.visible = true; cursorDot.position.set(q[0], 0.05, q[1]);
   if (!wallStart) { preview.visible = false; return; }
@@ -1952,11 +1928,11 @@ canvas.addEventListener('pointermove', e => {
     const it = itemById(drag.id); const step = e.altKey ? 0.05 : 0.25;
     let nx = snap(fp.x + drag.ox, step), nz = snap(fp.z + drag.oz, step);
     if (CATALOG[it.type].module && !e.altKey) [nx, nz] = snapModule(it, nx, nz);
-    if (nx !== it.x || nz !== it.z) { invalidate(true); it.x = nx; it.z = nz; drag.moved = true; const o = itemObjs.get(it.id); o.position.x = nx; o.position.z = nz; if (selHelper) selHelper.update(); }
+    if (nx !== it.x || nz !== it.z) { invalidate({ shadows: true, furniture: true }); it.x = nx; it.z = nz; drag.moved = true; const o = itemObjs.get(it.id); o.position.x = nx; o.position.z = nz; if (selHelper) selHelper.update(); }
     return;
   }
   if (mode === 'wall') { const fp = floorAtNdc(); if (fp) updateWallPreview(fp, e.shiftKey); }
-  else cursorDot.visible = false;
+  else if (cursorDot.visible) { cursorDot.visible = false; invalidate(); }
   if (mode === 'select' && showFurniture && !down) {
     const id = itemFromHit(pick(itemsRoot)); canvas.style.cursor = id ? 'grab' : '';
   } else if (mode !== 'select') canvas.style.cursor = mode === 'erase' ? 'not-allowed' : 'crosshair';
@@ -2084,7 +2060,7 @@ function segDist2(x, z, s) {
 const inBox = (x, z, q) => x > q[0] && x < q[2] && z > q[1] && z < q[3];
 /* A move is refused only if it takes you further into something, so you can always step back out. */
 function walkBlocked(x, z, ox, oz) {
-  for (const s of walkSegs) { const r = BODY + s[2] / 2, d = segDist2(x, z, s); if (d < r * r && d < segDist2(ox, oz, s) - 1e-6) return true; }
+  for (const s of spatialModel(state).segments) { const r = BODY + s[2] / 2, d = segDist2(x, z, s); if (d < r * r && d < segDist2(ox, oz, s) - 1e-6) return true; }
   for (const q of walk.blockers) if (inBox(x, z, q) && !inBox(ox, oz, q)) return true;
   const bx = wallsBox();   // open doorways lead in and out of rooms, never off the edge of the flat
   if (bx && !inBox(x, z, [bx[0] + BODY, bx[1] + BODY, bx[2] - BODY, bx[3] - BODY]) && inBox(ox, oz, [bx[0] + BODY, bx[1] + BODY, bx[2] - BODY, bx[3] - BODY])) return true;
@@ -2232,7 +2208,7 @@ let season = (() => { const m = new Date().getMonth(); return m >= 3 && m <= 7 ?
 let sunH = [0, -1], sunElev = 35, sunKey = '';
 const fmtTime = t => { const h = Math.floor(t), m = Math.round((t - h) * 60); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
 function setSun() {
-  invalidate(true);
+  invalidate({ shadows: true });
   const t = +timeIn.value; timeOut.textContent = fmtTime(t);
   const d = DECL[season] * Math.PI / 180, H = (t - 12.33) * 15 * Math.PI / 180;   // solar noon is about 12:20 in Bengaluru
   const E = -Math.cos(d) * Math.sin(H), N = Math.cos(LAT) * Math.sin(d) - Math.sin(LAT) * Math.cos(d) * Math.cos(H);
@@ -2248,7 +2224,7 @@ function setSun() {
   sun.intensity = 0.55 + (1 - low) * 0.25;
   document.querySelectorAll('#season button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.season === season)));
   sunKey = season + t;
-  if (lightGeo.src.length) scheduleRelight();
+  if (spatialModel(state).light.src.length) scheduleRelight();
   try { localStorage.setItem(STORE_KEY + '-sun2', JSON.stringify({ t, season })); } catch (e) { /* ignore */ }
 }
 timeIn.addEventListener('input', setSun);
@@ -2306,7 +2282,7 @@ function applyLookChrome() {
 function setLook(l) { look = l; applyLookChrome(); buildStructure(); buildItems(); buildFloor(); refreshSelection(); }
 document.getElementById('looks').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setLook(b.dataset.look); });
 document.getElementById('toggleDims').addEventListener('click', () => { showDims = !showDims; dimsRoot.visible = showDims && view !== 'walk'; applyLookChrome(); });
-function setFurniture(on) { invalidate(true); showFurniture = on; itemsRoot.visible = on; if (selHelper) selHelper.visible = on; document.getElementById('toggleFurniture').setAttribute('aria-pressed', String(on)); }
+function setFurniture(on) { invalidate({ shadows: true, furniture: true }); showFurniture = on; itemsRoot.visible = on; if (selHelper) selHelper.visible = on; document.getElementById('toggleFurniture').setAttribute('aria-pressed', String(on)); }
 document.getElementById('toggleFurniture').addEventListener('click', () => setFurniture(!showFurniture));
 document.getElementById('undoBtn').addEventListener('click', undo);
 
@@ -2319,32 +2295,39 @@ function twoStep(btn, idleText, armedText, run) {
 }
 /* "Keep this layout" stores the current plan as your own baseline; "Reset to my flat" returns to it (or to the built-in layout if none is kept). */
 const KEEP_KEY = STORE_KEY + '-kept';
-function keptLayout() { try { const k = localStorage.getItem(KEEP_KEY); return k ? migrate(JSON.parse(k)) : null; } catch (e) { return null; } }
+function keptLayout() { const k = storage.getItem(KEEP_KEY); return k ? normalizeLayout(JSON.parse(k), CATALOG) : null; }
 document.getElementById('keepBtn').addEventListener('click', () => {
   try { localStorage.setItem(KEEP_KEY, serialize()); setStatus('Layout kept. "Reset to my flat" now brings back exactly this arrangement.'); }
   catch (e) { setStatus('This browser would not store the layout, so Reset still uses the built-in one.'); }
 });
-twoStep(document.getElementById('resetBtn'), 'Reset to my flat', 'Tap again to reset', () => {
-  pushUndo(); const kept = keptLayout(); state = kept || sampleState(); selection = null; rebuildAll(); save();
-  setStatus((kept ? 'Back to your kept layout.' : 'Back to the built-in layout.') + ' Undo brings your changes back.');
-});
-twoStep(document.getElementById('blankBtn'), 'Blank sheet', 'Tap again to clear', () => {
-  pushUndo(); state = { walls: [], openings: [], items: [], labels: [], baseFloor: false, nextId: 1 }; selection = null; rebuildAll(); save(); setMode('wall'); setStatus('Blank sheet. Click to start drawing walls.');
-});
-
-mountSavedLayouts({
-  store: createLayoutStore({ getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) }, STORE_KEY + '-layouts'),
-  snapshot: () => JSON.parse(serialize()),
-  openLayout: (layout, name) => {
-    if (layout.items.some(item => !CATALOG[item.type])) throw new Error('This layout uses furniture that is not available in this version.');
-    const next = JSON.parse(JSON.stringify(layout));
-    // Persist before switching so a failed write leaves the working arrangement intact.
-    localStorage.setItem(STORE_KEY, JSON.stringify(next));
-    pushUndo();
+const replaceLayout = createLayoutReplacer({
+  catalog: CATALOG, repository: layoutRepository, getState: () => state, history: undoStack,
+  apply(next) {
     if (view === 'walk') setView(lastPlanView);
     setMode('select'); selection = null; state = next;
     clearTimeout(relightTimer); lastLightKey = ''; lastBake = null; aoKey = '';
+    daylightTex?.dispose(); aoTex?.dispose();
+    daylightTex = null; aoTex = null; daylightBox = null; dayCanvas = null; aoCanvas = null;
     rebuildAll(); buildFloor(); fitView();
+    saveFeedback('Saved on this device');
+  }
+});
+twoStep(document.getElementById('resetBtn'), 'Reset to my flat', 'Tap again to reset', () => {
+  try {
+    const kept = keptLayout(); replaceLayout(kept || sampleState());
+    setStatus((kept ? 'Back to your kept layout.' : 'Back to the built-in layout.') + ' Undo brings your changes back.');
+  } catch (error) { saveFeedback('Could not reset: ' + error.message, true); }
+});
+twoStep(document.getElementById('blankBtn'), 'Blank sheet', 'Tap again to clear', () => {
+  try { replaceLayout(blankLayout()); setMode('wall'); setStatus('Blank sheet. Click to start drawing walls.'); }
+  catch (error) { saveFeedback('Could not clear: ' + error.message, true); }
+});
+
+mountSavedLayouts({
+  store: createLayoutStore(storage, STORE_KEY + '-layouts', CATALOG),
+  snapshot: () => JSON.parse(serialize()),
+  openLayout: (layout, name) => {
+    replaceLayout(layout);
     setStatus(`Opened “${name}”. Undo restores your previous arrangement.`);
   }
 });
@@ -2432,7 +2415,7 @@ const qiOverlay = createQiOverlay(scene, () => {
     name: op.wood ? 'Main entrance' : `Door ${i + 1}`,
     point: [(op.a[0] + op.b[0]) / 2, (op.a[1] + op.b[1]) / 2]
   }));
-  return { bounds, furniture, doors, walls: walkSegs, footprint: state.baseFloor ? FOOTPRINT : null,
+  return { bounds, furniture, doors, walls: spatialModel(state).segments, footprint: state.baseFloor ? FOOTPRINT : null,
     contains: (x, z) => state.baseFloor ? inPoly(x, z, FOOTPRINT) : !!bounds && x >= bounds[0] && x <= bounds[2] && z >= bounds[1] && z <= bounds[3] };
 }, on => { if (on) { toggleOpts(false); setMode('select'); select(null); setView('top'); } else fitView(); });
 const wallDoneEl = document.getElementById('wallDone');
@@ -2465,5 +2448,6 @@ setMode('select');
 fitView();
 paintRanges();
 setStatus(state.items.length ? 'Your flat is loaded with sample furniture. Click a piece to move, turn or restyle it.' : HINTS.select);
+if (loadWarning) saveFeedback(loadWarning, true);
 loop();
 })();
