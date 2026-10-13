@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fbfbfb">
+  <title>Blueprint Maker</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 2.5h13v13h-13z"/><path d="M2.5 9h6.5V2.5M9 9v6.5M12 9h3.5"/></svg></div>
+      <div class="brand-text"><b>Blueprint Maker</b><span>BTM 3BHK · east entrance</span></div>
+    </div>
+    <button class="btn btn-primary browse-btn" id="browseBtn" type="button" title="Switch between just looking around and editing">
+      <span class="off"><svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg><span class="long">Done editing</span><span class="short">Done</span></span>
+      <span class="on"><svg class="i" viewBox="0 0 16 16"><path d="M10.5 2.5l3 3-8 8h-3v-3z"/><path d="M9 4l3 3"/></svg>Edit</span>
+    </button>
+    <div class="bar-divider edit-divider"></div>
+    <div class="tools-group" role="group" aria-label="Tool">
+      <div class="seg" id="tools">
+        <button type="button" data-mode="select" aria-pressed="true"><svg class="i" viewBox="0 0 16 16"><path d="M3.5 2.5l8.5 5-3.8 1.1-1.9 3.6z"/></svg><span>Select</span><kbd>V</kbd></button>
+        <button type="button" data-mode="wall" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 13.5V3h3v10.5"/></svg><span>Wall</span><kbd>W</kbd></button>
+        <button type="button" data-mode="door" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 13.5h2.5M5 13.5V3.5M5 3.5a10 10 0 0 1 9 10"/></svg><span>Door</span><kbd>O</kbd></button>
+        <button type="button" data-mode="window" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 5.5h11v5h-11zM2.5 8h11"/></svg><span>Window</span><kbd>N</kbd></button>
+        <button type="button" data-mode="erase" aria-pressed="false"><svg class="i" viewBox="0 0 16 16"><path d="M6.5 13.5h7M3 10l6.2-6.2 4 4-5.7 5.7H6.5z"/><path d="M6.2 6.8l4 4"/></svg><span>Erase</span><kbd>X</kbd></button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="edit-group" id="editGroup">
+      <button class="btn btn-icon btn-quiet" id="undoBtn" type="button" aria-label="Undo" title="Undo (Ctrl+Z)"><svg class="i" viewBox="0 0 16 16"><path d="M5.5 3.5L3 6l2.5 2.5"/><path d="M3 6h6.5a3.5 3.5 0 0 1 0 7H7"/></svg></button>
+      <div class="pop-wrap">
+        <button class="btn btn-icon btn-quiet" id="moreBtn" type="button" aria-label="More" aria-expanded="false" aria-controls="moreMenu" title="Layout actions"><svg class="i" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="0.6"/><circle cx="8" cy="8" r="0.6"/><circle cx="12.5" cy="8" r="0.6"/></svg></button>
+        <div class="pop menu" id="moreMenu" role="menu">
+          <button class="menu-item" id="keepBtn" type="button" role="menuitem" title="Remember this exact layout; Reset brings it back">Keep this layout</button>
+          <button class="menu-item" id="resetBtn" type="button" role="menuitem">Reset to my flat</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" id="blankBtn" type="button" role="menuitem">Blank sheet</button>
+        </div>
+      </div>
+    </div>
+    <div class="bar-divider wide-only"></div>
+    <button class="btn" id="optsToggle" type="button" aria-expanded="false" aria-controls="opts" aria-label="View and light settings"><svg class="i" viewBox="0 0 16 16"><path d="M2 4.5h7M12.5 4.5H14M2 11.5h1.5M7 11.5h7"/><circle cx="10.8" cy="4.5" r="1.7"/><circle cx="5.2" cy="11.5" r="1.7"/></svg><span class="long">View &amp; light</span></button>
+    <div class="opts pop" id="opts" role="dialog" aria-label="View and light settings">
+      <section class="opt-sec">
+        <h4>Walls</h4>
+        <div class="seg seg-full" id="reveal" role="group" aria-label="Wall reveal">
+          <button type="button" data-reveal="down" aria-pressed="false" title="All walls dropped to a low curb">Down</button>
+          <button type="button" data-reveal="cut" aria-pressed="true" title="Far outer walls full height, the rest cut low">Cutaway</button>
+          <button type="button" data-reveal="low" aria-pressed="false" title="Every wall cut at the height below">Low</button>
+          <button type="button" data-reveal="full" aria-pressed="false" title="Every wall at full ceiling height">Full</button>
+        </div>
+        <label class="slider" id="wallHWrap"><span class="label">Cut at</span><input id="wallH" type="range" min="1" max="9" step="0.5" value="4"><output id="wallHOut">4 ft</output></label>
+        <label class="slider" id="fullHWrap"><span class="label">Ceiling</span><input id="fullH" type="range" min="7" max="12" step="0.5" value="10"><output id="fullHOut">10 ft</output></label>
+      </section>
+      <section class="opt-sec">
+        <h4>Sunlight</h4>
+        <label class="slider"><span class="label">Time</span><input id="sunTime" type="range" min="7" max="17.75" step="0.25" value="9.5" aria-label="Time of day"><output id="sunTimeOut">9:30 am</output></label>
+        <div class="seg seg-full" id="season" role="group" aria-label="Season">
+          <button type="button" data-season="summer" aria-pressed="false" title="April to August: the sun passes slightly to the north">Summer</button>
+          <button type="button" data-season="equinox" aria-pressed="true" title="March and September: the sun passes almost overhead">Mar · Sep</button>
+          <button type="button" data-season="winter" aria-pressed="false" title="November to February: the sun stays to the south">Winter</button>
+        </div>
+        <label class="slider"><span class="label">Window light</span><input id="winLight" type="range" min="0" max="2" step="0.1" value="1"><output id="winLightOut">1.0×</output></label>
+        <label class="slider"><span class="label">Bounce</span><input id="bounce" type="range" min="0" max="2" step="0.1" value="1"><output id="bounceOut">1.0×</output></label>
+      </section>
+      <section class="opt-sec">
+        <h4>Style</h4>
+        <div class="seg seg-full" id="looks" role="group" aria-label="Look">
+          <button type="button" data-look="watercolor" aria-pressed="true">Watercolour</button>
+          <button type="button" data-look="illustrated" aria-pressed="false">Illustrated</button>
+          <button type="button" data-look="technical" aria-pressed="false">Technical</button>
+        </div>
+        <div class="opt-row">
+          <button class="toggle" id="toggleDims" type="button" aria-pressed="true">Dimensions</button>
+          <button class="toggle" id="toggleFurniture" type="button" aria-pressed="true">Furniture</button>
+        </div>
+      </section>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="catalog" id="catalog" aria-label="Furniture catalog">
+      <div class="catalog-head">
+        <h2>Furniture</h2>
+        <p>Click a piece to drop it in the middle of the view, or drag it onto the plan.</p>
+        <div class="search-wrap"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg><input class="search" id="search" type="search" placeholder="Search furniture" aria-label="Search furniture"></div>
+      </div>
+      <div class="catalog-list" id="catalogList"></div>
+    </aside>
+
+    <section class="stage" id="stage">
+      <div class="loading" id="loading">Loading 3D view…</div>
+      <div class="seg view-pill" id="views" role="group" aria-label="View">
+        <button type="button" data-view="iso" aria-pressed="true">2.5D</button>
+        <button type="button" data-view="top" aria-pressed="false">Plan</button>
+        <button type="button" data-view="walk" aria-pressed="false" title="Walk through the flat at eye level">Walk</button>
+      </div>
+      <div class="hint-top glass" id="hintTop">Drag to orbit · right-drag to pan · scroll to zoom</div>
+      <svg class="compass" viewBox="0 0 54 54" role="img" aria-label="Compass: the main door faces east"><circle cx="27" cy="27" r="24" fill="rgba(251,251,251,0.92)" stroke="#cfcfcf"></circle><g id="compassRose"><path d="M27 7 L31.5 27 L27 24.5 L22.5 27 Z" fill="#141414"></path><path d="M27 47 L31.5 27 L27 29.5 L22.5 27 Z" fill="#cfcfcf"></path><g font-family="IBM Plex Mono, monospace" font-size="7.5" font-weight="600" text-anchor="middle" fill="#6a6a6a"><text x="27" y="6.5" fill="#141414">N</text><text x="49" y="29.5">E</text><text x="27" y="52.5">S</text><text x="5" y="29.5">W</text></g></g></svg>
+      <button class="walk-btn" id="walkBtn" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="2.6" r="1.4"/><path d="M8.6 5.4 6.8 9.2l2.4 1.6.6 4M8.6 5.4l2 2.4 2.2.6M6.8 9.2 5.6 14.4M8.6 5.4 6 6.4 4.8 8.6"/></svg><span>Leave walk</span></button>
+      <div class="joy" id="joy" aria-label="Walk joystick"><i></i></div>
+      <div class="crosshair"></div>
+      <button class="wall-done" id="wallDone" type="button" hidden>Done with this wall</button>
+      <div class="status glass" id="status"><span id="statusText">Select a piece to move it. Drag empty floor to orbit.</span><span class="meta" id="statusMeta"></span></div>
+      <div class="inspector" id="inspector" hidden></div>
+      <button class="fab" id="catalogToggle" type="button" aria-label="Add furniture" aria-expanded="false"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
+    </section>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
