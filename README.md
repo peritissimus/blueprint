@@ -4,6 +4,7 @@ A 2.5D floor-plan maker for the BTM 3BHK flat (east-facing entrance), built with
 
 - Furniture catalogue with drag, turn, resize and finishes
 - Feng Shui overlay: illustrative qi trails through doorways and around furniture, entrance selector, pause and speed controls; respects reduced motion. This geometric circulation aid is not a physical energy simulation or traditional Feng Shui assessment.
+- Two houses: BTM 3BHK (Bengaluru) and Hallmark Sunny Side 3BHK (Gandipet, Hyderabad). Switch from the app name; each keeps its own arrangement, sunlight and compass
 - Named saved layouts: save copies, reopen, rename, update and delete from the Layouts button
 - Wall, door and window drawing tools, undo, keep/reset layout
 - Daylight that follows the sun's real path over Bengaluru by time of day and season, with soft shadows and bounce light
@@ -33,6 +34,7 @@ npm run preview   # serves the built site
 - `src/style.css` — the monochrome interface
 - `src/main.js` — application wiring, furniture models, scene rendering, lighting and editor controls
 - `src/model/layout.js` — shared versioned layout validation and legacy normalization
+- `src/model/houses.js` — the houses: outline, wet floors, latitude, compass, walk start and starting layout. Layouts name their house (`house`); older ones without it are BTM. To add a house, add an entry here
 - `src/model/spatial.js` — renderer-independent wall/opening geometry for lighting, walking and Qi
 - `src/storage/layout-repository.js` — working-layout persistence and corrupt-data recovery
 - `src/editor/replace-layout.js` — shared validate/persist/history/apply transaction for open, undo, reset and blank sheet

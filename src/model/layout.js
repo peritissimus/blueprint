@@ -1,10 +1,12 @@
+import { HOUSE_IDS } from './houses.js';
+
 export const LAYOUT_VERSION = 1;
 const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
 const optionalNumber = (value, min, inclusive = false) => value == null || (Number.isFinite(value) && (inclusive ? value >= min : value > min));
 
 export function validLayout(layout, catalog) {
   if (!layout || (layout.version != null && layout.version !== LAYOUT_VERSION) ||
-      typeof layout.baseFloor !== 'boolean' || !Number.isSafeInteger(layout.nextId) || layout.nextId < 1) return false;
+      typeof layout.baseFloor !== 'boolean' || (layout.house != null && !HOUSE_IDS.includes(layout.house)) || !Number.isSafeInteger(layout.nextId) || layout.nextId < 1) return false;
   if (!Array.isArray(layout.walls) || !layout.walls.every(w => w && point(w.a) && point(w.b) &&
       (w.kind == null || ['ext', 'int', 'railing'].includes(w.kind)) && optionalNumber(w.t, 0) && optionalNumber(w.h, 0, true))) return false;
   if (!Array.isArray(layout.openings) || !layout.openings.every(o => o && point(o.a) && point(o.b) &&

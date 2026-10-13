@@ -12,9 +12,13 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand">
+    <div class="pop-wrap brand-wrap">
+    <button class="brand" id="houseBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="houseMenu" title="Switch house">
       <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 2.5h13v13h-13z"/><path d="M2.5 9h6.5V2.5M9 9v6.5M12 9h3.5"/></svg></div>
-      <div class="brand-text"><b>Blueprint Maker</b><span>BTM 3BHK · east entrance</span></div>
+      <div class="brand-text"><b>Blueprint Maker</b><span id="houseSub">BTM 3BHK · east entrance</span></div>
+      <svg class="i chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5L8 10l3.5-3.5"/></svg>
+    </button>
+    <div class="pop menu house-menu" id="houseMenu" role="menu" aria-label="Houses"></div>
     </div>
     <button class="btn btn-primary browse-btn" id="browseBtn" type="button" title="Switch between just looking around and editing">
       <span class="off"><svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg><span class="long">Done editing</span><span class="short">Done</span></span>

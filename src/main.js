@@ -1,5 +1,6 @@
 import { normalizeLayout, blankLayout } from './model/layout.js';
 import { createSpatialCache, matchOpening } from './model/spatial.js';
+import { HOUSES, HOUSE_IDS, houseOf } from './model/houses.js';
 import { createLayoutRepository } from './storage/layout-repository.js';
 import { createLayoutReplacer } from './editor/replace-layout.js';
 import * as THREE from 'three';
@@ -35,7 +36,7 @@ const colorCss = hex => '#' + hex.toString(16).padStart(6, '0');
 const FIN_CSS = { oak: '#c49a6c', walnut: '#6e4b34', wenge: '#3b2a20', white: '#f4f2ed', charcoal: '#3b3a38', linen: '#d8cfbf', sage: '#98a68f', clay: '#c58b6d' };
 
 /* ---------- The flat as drawn (sheet A-01) ---------- */
-function sampleState() {
+function btmTemplate() {
   const W = (x1, y1, x2, y2, kind) => ({ a: P(x1, y1), b: P(x2, y2), kind: kind || 'int' });
   const walls = [
     W(356,161,590,161,'ext'), W(590,161,590,70,'ext'), W(590,70,980,70,'ext'), W(980,70,980,395,'ext'),
@@ -121,8 +122,13 @@ function foyerItems(I) {
     I('doormat', 18.2, 4.6, 0, 'clay', { w: 3, d: 1.8 })
   ];
 }
-const FOOTPRINT = [[356,161],[590,161],[590,70],[980,70],[980,1084],[70,1084],[70,408],[356,408]].map(([x, y]) => P(x, y));
-const WET = [[200,928,356,1084],[655,785,785,1019],[655,1019,980,1084],[902,395,980,707]].map(([x1, y1, x2, y2]) => [P(x1, y1), P(x2, y2)]);
+/* The house a layout belongs to supplies its outline, wet floors, location and compass (src/model/houses.js). */
+const HOUSE = () => houseOf(state);
+function sampleState(id = 'btm') {
+  const layout = id === 'btm' || !HOUSES[id] ? btmTemplate() : HOUSES[id].template();
+  layout.items.forEach(it => { it.finish ||= CATALOG[it.type].fin; });
+  return layout;
+}
 
 /* ---------- Three.js setup ---------- */
 /* Soft shadows (PCSS) — a GLSL patch to Three's shadow lookup.
@@ -1174,7 +1180,7 @@ function doorLeaf(parent, H, swingDir, len, material, ud, selected, wh) {
    their windows, fall off towards the back, and light spills through open doorways into passages. */
 let daylightTex = null, daylightBox = null, windowLight = 1.0;
 function wallsBox() {
-  if (state.baseFloor) { const xs = FOOTPRINT.map(p => p[0]), zs = FOOTPRINT.map(p => p[1]); return [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]; }
+  if (state.baseFloor) { const xs = HOUSE().footprint.map(p => p[0]), zs = HOUSE().footprint.map(p => p[1]); return [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]; }
   if (!state.walls.length) return null;
   let a = [Infinity, Infinity, -Infinity, -Infinity];
   state.walls.forEach(w => [w.a, w.b].forEach(p => { a[0] = Math.min(a[0], p[0]); a[1] = Math.min(a[1], p[1]); a[2] = Math.max(a[2], p[0]); a[3] = Math.max(a[3], p[1]); }));
@@ -1214,7 +1220,7 @@ function bakeDaylight() {
   const val = new Float32Array(W * H);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const px = minX + (i + 0.5) * res, pz = minZ + (j + 0.5) * res;
-    if (state.baseFloor && !inPoly(px, pz, FOOTPRINT)) continue;
+    if (state.baseFloor && !inPoly(px, pz, HOUSE().footprint)) continue;
     let sum = 0;
     for (let s = 0; s < src.length; s += 5) {
       const sx = src[s], sz = src[s + 1];
@@ -1253,7 +1259,7 @@ function bakeDaylight() {
   const cDirect = new Float32Array(CW * CH), cMask = new Uint8Array(CW * CH);
   for (let j = 0; j < CH; j++) for (let i = 0; i < CW; i++) {
     const px = minX + (i + 0.5) * cres, pz = minZ + (j + 0.5) * cres;
-    cMask[j * CW + i] = (!state.baseFloor || inPoly(px, pz, FOOTPRINT)) ? 1 : 0;
+    cMask[j * CW + i] = (!state.baseFloor || inPoly(px, pz, HOUSE().footprint)) ? 1 : 0;
     let s = 0, n = 0;
     for (let b = 0; b < S; b++) for (let a = 0; a < S; a++) { const x = i * S + a, y = j * S + b; if (x < W && y < H) { s += direct[y * W + x]; n++; } }
     cDirect[j * CW + i] = n ? s / n : 0;
@@ -1401,7 +1407,7 @@ function buildFloor() {
   if (daylightTex && !daylightBox) daylightBox = box;
   let g;
   if (state.baseFloor) {
-    g = new THREE.ShapeGeometry(new THREE.Shape(FOOTPRINT.map(p => new THREE.Vector2(p[0], -p[1])))); g.rotateX(-Math.PI / 2);
+    g = new THREE.ShapeGeometry(new THREE.Shape(HOUSE().footprint.map(p => new THREE.Vector2(p[0], -p[1])))); g.rotateX(-Math.PI / 2);
   } else {
     const [x0, z0, x1, z1] = box; g = new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2); g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
     const pos = g.attributes.position, uv = g.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), -pos.getZ(i));
@@ -1409,7 +1415,7 @@ function buildFloor() {
   if (daylightTex) setUv2(g, 0, 0);
   const floor = new THREE.Mesh(g, floorMat(look !== 'technical' ? floorTexIllus : floorTex, 0.55)); floor.receiveShadow = true; floorRoot.add(floor);
   if (!state.baseFloor) return;
-  WET.forEach(([p0, p1]) => {
+  HOUSE().wet.forEach(([p0, p1]) => {
     const w = Math.abs(p1[0] - p0[0]), d = Math.abs(p1[1] - p0[1]);
     const t = wetTexBase.clone(); t.needsUpdate = true; t.repeat.set(w, d);
     const geo = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2); const cx = (p0[0] + p1[0]) / 2, cz = (p0[1] + p1[1]) / 2;
@@ -1422,7 +1428,7 @@ let relightTimer = null, lastLightKey = '';
 function scheduleRelight(delay) {
   const lightGeo = spatialModel(state).light;
   // the bake depends only on walls, openings and the floor outline, not on how walls are revealed
-  const key = JSON.stringify(lightGeo) + '|' + state.baseFloor + '|' + sunKey;
+  const key = JSON.stringify(lightGeo) + '|' + state.baseFloor + '|' + HOUSE().id + '|' + sunKey;
   if (key === lastLightKey && floorRoot.children.length) return;
   clearTimeout(relightTimer);
   relightTimer = setTimeout(() => { lastLightKey = key; bakeDaylight(); buildFloor(); }, delay == null ? 350 : delay);
@@ -1791,8 +1797,9 @@ document.getElementById('keepBtn').addEventListener('click', () => setTimeout(()
 document.addEventListener('pointerdown', e => {
   if (!e.target.closest('#opts, #optsToggle')) toggleOpts(false);
   if (!e.target.closest('#moreMenu, #moreBtn')) toggleMore(false);
+  if (!e.target.closest('#houseMenu, #houseBtn')) toggleHouseMenu(false);
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { toggleOpts(false); toggleMore(false); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { toggleOpts(false); toggleMore(false); toggleHouseMenu(false); } });
 /* Sliders show their filled part. */
 function paintRange(r) { const t = (r.value - r.min) / (r.max - r.min || 1); r.style.setProperty('--fill', (t * 100) + '%'); }
 function paintRanges() { document.querySelectorAll('input[type=range]').forEach(paintRange); }
@@ -2040,6 +2047,8 @@ const walkFill = new THREE.Group(); walkFill.visible = false; scene.add(walkFill
 [[1, 0.45], [-1, -0.45], [0.45, -1], [-0.45, 1]].forEach(([x, z]) => { const l = new THREE.DirectionalLight(0xfff6ea, 0.2); l.position.set(x, 0, z); l.target.position.set(0, 0, 0); walkFill.add(l, l.target); });
 const walkCam = new THREE.PerspectiveCamera(70, 1, 0.12, 400); walkCam.rotation.order = 'YXZ';
 const walk = { x: 18.2, z: 6.6, yaw: Math.PI, pitch: -0.12, keys: {}, joy: [0, 0], goal: null, blockers: [], bob: 0, last: 0, look: null, lastTap: 0 };
+function resetWalkStart() { const [x, z, yaw] = HOUSE().walk; walk.x = x; walk.z = z; walk.yaw = yaw; }
+resetWalkStart();
 function computeBlockers() {
   walk.blockers = [];
   if (!showFurniture) return;
@@ -2200,17 +2209,17 @@ controls.addEventListener('change', () => {
 /* The sun follows its real path over Bengaluru (12.97° N). The flat's main door faces east, which is the
    top edge of the plan, so north is to the plan's left. Morning sun pours in from the entrance side,
    afternoon sun from the far side; in winter it leans south, in summer slightly north. */
-const LAT = 12.97 * Math.PI / 180;
 const DECL = { summer: 23.0, equinox: 0, winter: -23.0 };
-const WORLD = { east: [0, -1], north: [-1, 0] };   // plan directions as [x, z]
+const WORLD = { get east() { return HOUSE().east; }, get north() { return HOUSE().north; } };   // plan directions as [x, z]
 const timeIn = document.getElementById('sunTime'), timeOut = document.getElementById('sunTimeOut');
 let season = (() => { const m = new Date().getMonth(); return m >= 3 && m <= 7 ? 'summer' : (m >= 10 || m <= 1) ? 'winter' : 'equinox'; })();
 let sunH = [0, -1], sunElev = 35, sunKey = '';
 const fmtTime = t => { const h = Math.floor(t), m = Math.round((t - h) * 60); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
 function setSun() {
+  const LAT = HOUSE().lat * Math.PI / 180;
   invalidate({ shadows: true });
   const t = +timeIn.value; timeOut.textContent = fmtTime(t);
-  const d = DECL[season] * Math.PI / 180, H = (t - 12.33) * 15 * Math.PI / 180;   // solar noon is about 12:20 in Bengaluru
+  const d = DECL[season] * Math.PI / 180, H = (t - HOUSE().solarNoon) * 15 * Math.PI / 180;   // solar noon is about 12:20 in Bengaluru
   const E = -Math.cos(d) * Math.sin(H), N = Math.cos(LAT) * Math.sin(d) - Math.sin(LAT) * Math.cos(d) * Math.cos(H);
   let U = Math.sin(LAT) * Math.sin(d) + Math.cos(LAT) * Math.cos(d) * Math.cos(H);
   U = Math.max(U, 0.17);                                   // keep the earliest/latest light just above the horizon
@@ -2223,7 +2232,7 @@ function setSun() {
   const low = Math.max(0, Math.min(1, 1 - (deg - 10) / 65)); sun.color.setRGB(1, 0.95 - low * 0.12, 0.88 - low * 0.26);
   sun.intensity = 0.55 + (1 - low) * 0.25;
   document.querySelectorAll('#season button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.season === season)));
-  sunKey = season + t;
+  sunKey = HOUSE().id + season + t;
   if (spatialModel(state).light.src.length) scheduleRelight();
   try { localStorage.setItem(STORE_KEY + '-sun2', JSON.stringify({ t, season })); } catch (e) { /* ignore */ }
 }
@@ -2294,10 +2303,10 @@ function twoStep(btn, idleText, armedText, run) {
   });
 }
 /* "Keep this layout" stores the current plan as your own baseline; "Reset to my flat" returns to it (or to the built-in layout if none is kept). */
-const KEEP_KEY = STORE_KEY + '-kept';
-function keptLayout() { const k = storage.getItem(KEEP_KEY); return k ? normalizeLayout(JSON.parse(k), CATALOG) : null; }
+const keepKey = () => STORE_KEY + '-kept' + (HOUSE().id === 'btm' ? '' : '-' + HOUSE().id);
+function keptLayout() { const k = storage.getItem(keepKey()); return k ? normalizeLayout(JSON.parse(k), CATALOG) : null; }
 document.getElementById('keepBtn').addEventListener('click', () => {
-  try { localStorage.setItem(KEEP_KEY, serialize()); setStatus('Layout kept. "Reset to my flat" now brings back exactly this arrangement.'); }
+  try { localStorage.setItem(keepKey(), serialize()); setStatus('Layout kept. "Reset to my flat" now brings back exactly this arrangement.'); }
   catch (e) { setStatus('This browser would not store the layout, so Reset still uses the built-in one.'); }
 });
 const replaceLayout = createLayoutReplacer({
@@ -2305,21 +2314,22 @@ const replaceLayout = createLayoutReplacer({
   apply(next) {
     if (view === 'walk') setView(lastPlanView);
     setMode('select'); selection = null; state = next;
+    resetWalkStart(); updateHouseUI();
     clearTimeout(relightTimer); lastLightKey = ''; lastBake = null; aoKey = '';
     daylightTex?.dispose(); aoTex?.dispose();
     daylightTex = null; aoTex = null; daylightBox = null; dayCanvas = null; aoCanvas = null;
-    rebuildAll(); buildFloor(); fitView();
+    rebuildAll(); buildFloor(); fitView(); setSun();
     saveFeedback('Saved on this device');
   }
 });
 twoStep(document.getElementById('resetBtn'), 'Reset to my flat', 'Tap again to reset', () => {
   try {
-    const kept = keptLayout(); replaceLayout(kept || sampleState());
+    const kept = keptLayout(); replaceLayout(kept || sampleState(HOUSE().id));
     setStatus((kept ? 'Back to your kept layout.' : 'Back to the built-in layout.') + ' Undo brings your changes back.');
   } catch (error) { saveFeedback('Could not reset: ' + error.message, true); }
 });
 twoStep(document.getElementById('blankBtn'), 'Blank sheet', 'Tap again to clear', () => {
-  try { replaceLayout(blankLayout()); setMode('wall'); setStatus('Blank sheet. Click to start drawing walls.'); }
+  try { replaceLayout({ ...blankLayout(), house: HOUSE().id }); setMode('wall'); setStatus('Blank sheet. Click to start drawing walls.'); }
   catch (error) { saveFeedback('Could not clear: ' + error.message, true); }
 });
 
@@ -2331,6 +2341,37 @@ mountSavedLayouts({
     setStatus(`Opened “${name}”. Undo restores your previous arrangement.`);
   }
 });
+
+/* Houses: each keeps its own working arrangement. Switching sets the current house's layout aside
+   (STORE_KEY-house-<id>) and brings back the other's, or its starting layout the first time. Undo goes back. */
+const houseStashKey = id => STORE_KEY + '-house-' + id;
+const houseBtn = document.getElementById('houseBtn'), houseMenu = document.getElementById('houseMenu');
+function toggleHouseMenu(open) { houseMenu.classList.toggle('open', open); houseBtn.setAttribute('aria-expanded', String(open)); }
+function updateHouseUI() {
+  const current = HOUSE();
+  document.getElementById('houseSub').textContent = current.subtitle;
+  houseMenu.innerHTML = HOUSE_IDS.map(id => {
+    const h = HOUSES[id], on = id === current.id;
+    return `<button class="menu-item house-item" type="button" role="menuitemradio" aria-checked="${on}" data-house="${id}">` +
+      `<span><b>${h.name}</b><small>${h.place}</small></span>` +
+      (on ? '<svg class="i" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>' : '') + '</button>';
+  }).join('');
+}
+function switchHouse(id) {
+  const from = HOUSE().id;
+  if (id === from || !HOUSES[id]) return;
+  try { storage.setItem(houseStashKey(from), serialize()); }
+  catch (error) { saveFeedback('Could not set this house aside, so it stays open: ' + error.message, true); return; }
+  let next = null;
+  try { const raw = storage.getItem(houseStashKey(id)); next = raw ? normalizeLayout(JSON.parse(raw), CATALOG) : null; } catch { next = null; }
+  try {
+    replaceLayout(next || sampleState(id));
+    setStatus(`${HOUSES[id].name}: ${next ? 'your arrangement' : 'starting layout'}. Undo goes back to ${HOUSES[from].name}.`);
+  } catch (error) { saveFeedback('Could not open that house: ' + error.message, true); }
+}
+houseBtn.addEventListener('click', () => { toggleOpts(false); toggleMore(false); toggleHouseMenu(!houseMenu.classList.contains('open')); });
+houseMenu.addEventListener('click', e => { const b = e.target.closest('[data-house]'); if (b) { toggleHouseMenu(false); switchHouse(b.dataset.house); } });
+updateHouseUI();
 
 /* Keyboard */
 window.addEventListener('keydown', e => {
@@ -2415,8 +2456,8 @@ const qiOverlay = createQiOverlay(scene, () => {
     name: op.wood ? 'Main entrance' : `Door ${i + 1}`,
     point: [(op.a[0] + op.b[0]) / 2, (op.a[1] + op.b[1]) / 2]
   }));
-  return { bounds, furniture, doors, walls: spatialModel(state).segments, footprint: state.baseFloor ? FOOTPRINT : null,
-    contains: (x, z) => state.baseFloor ? inPoly(x, z, FOOTPRINT) : !!bounds && x >= bounds[0] && x <= bounds[2] && z >= bounds[1] && z <= bounds[3] };
+  return { bounds, furniture, doors, walls: spatialModel(state).segments, footprint: state.baseFloor ? HOUSE().footprint : null,
+    contains: (x, z) => state.baseFloor ? inPoly(x, z, HOUSE().footprint) : !!bounds && x >= bounds[0] && x <= bounds[2] && z >= bounds[1] && z <= bounds[3] };
 }, on => { if (on) { toggleOpts(false); setMode('select'); select(null); setView('top'); } else fitView(); });
 const wallDoneEl = document.getElementById('wallDone');
 function loop(now = performance.now()) {

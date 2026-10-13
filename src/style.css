@@ -91,7 +91,17 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.15); }
 
 /* ---------- Top bar ---------- */
 .bar { position: relative; z-index: 10; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 14px; box-sizing: border-box; background: var(--panel); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: 6px; }
+.brand-wrap { margin-right: 6px; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px 4px 4px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; transition: background-color 150ms ease, transform 160ms var(--ease-out); }
+.brand:active { transform: scale(0.98); }
+.brand .chev { color: var(--muted); }
+.brand[aria-expanded="true"] { background: var(--track); }
+@media (hover: hover) and (pointer: fine) { .brand:hover { background: var(--track); } }
+.house-menu { left: 0; right: auto; transform-origin: top left; min-width: 260px; }
+.house-item { justify-content: space-between; min-height: 50px; }
+.house-item span { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.house-item b { font-weight: 600; }
+.house-item small { font-size: 12px; color: var(--muted); font-weight: 400; }
 .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: #ffffff; display: grid; place-items: center; flex: 0 0 auto; }
 .brand-mark svg { width: 18px; height: 18px; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
@@ -233,7 +243,7 @@ body.browsing .main { grid-template-columns: minmax(0, 1fr); }
 /* ---------- Phones and small tablets ---------- */
 @media (max-width: 860px) {
   .bar { gap: 6px; padding: env(safe-area-inset-top, 0px) 10px 0; min-height: 58px; }
-  .brand { margin-right: auto; }
+  .brand-wrap { margin-right: auto; }
   .brand-text span { display: none; }
   .bar-divider { display: none; }
   .only-narrow { display: inline-flex; }
