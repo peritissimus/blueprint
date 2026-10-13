@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './style.css';
 
-/* Blueprint Maker — 2.5D floor-plan editor for the BTM 3BHK flat. Three.js r147, daylight bake, watercolour pass. */
+/* Blueprint Maker — 2.5D floor-plan editor for the BTM 3BHK flat. Three.js r147, daylight bake, illustrated and technical looks. */
 (function () {
 'use strict';
 
@@ -1020,8 +1020,7 @@ let undoStack = [];
 let mode = 'select', view = 'iso';
 let wallH = 6.5, fullH = 10, reveal = 'low', showLabels = true, showFurniture = true;
 let look = 'illustrated', showDims = true;
-look = 'watercolor';
-try { const lk = JSON.parse(localStorage.getItem(STORE_KEY + '-look2') || 'null'); if (lk) { look = ['technical', 'illustrated', 'watercolor'].includes(lk.look) ? lk.look : 'watercolor'; showDims = lk.dims !== false; } } catch (e) { /* ignore */ }
+try { const lk = JSON.parse(localStorage.getItem(STORE_KEY + '-look2') || 'null'); if (lk) { look = ['technical', 'illustrated'].includes(lk.look) ? lk.look : 'illustrated'; showDims = lk.dims !== false; } } catch (e) { /* ignore */ }
 let selection = null; // {kind:'item', id} | {kind:'opening', idx} | {kind:'wall', idx}
 const PAINTS = {
   white:    { name: 'Warm white',  hex: 0xf1e8d8, css: '#f1e8d8' },
@@ -2227,9 +2226,9 @@ bounceIn.addEventListener('input', () => { bounceAmt = +bounceIn.value; bounceOu
 
 /* Look: Illustrated (warm paper, cream wall caps, ink outlines, dimensions) or Technical (black poché wall caps, no ink). */
 function applyLookChrome() {
-  const ill = look !== 'technical', wc = look === 'watercolor';
-  renderer.setClearColor(wc ? 0xf4efe5 : ill ? 0xf1e9da : 0xe8e5de);
-  ground.material.color.set(wc ? 0xf3ece0 : ill ? 0xf0e7d6 : 0xe6e2da);
+  const ill = look !== 'technical';
+  renderer.setClearColor(ill ? 0xf1e9da : 0xe8e5de);
+  ground.material.color.set(ill ? 0xf0e7d6 : 0xe6e2da);
   document.querySelectorAll('#looks button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.look === look)));
   document.getElementById('toggleDims').setAttribute('aria-pressed', String(showDims));
   try { localStorage.setItem(STORE_KEY + '-look2', JSON.stringify({ look, dims: showDims })); } catch (e) { /* ignore */ }
@@ -2309,7 +2308,7 @@ function updateMeta() {
 const FRUSTUM = 50;
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
-  renderer.setSize(w, h, false); sizeWatercolor(); if (typeof sizeWalkCam === 'function') sizeWalkCam();
+  renderer.setSize(w, h, false); if (typeof sizeWalkCam === 'function') sizeWalkCam();
   const aspect = w / h; const fh = aspect < 1 ? FRUSTUM / aspect * 0.75 : FRUSTUM;
   camera.left = (-fh * aspect) / 2; camera.right = (fh * aspect) / 2; camera.top = fh / 2; camera.bottom = -fh / 2;
   camera.updateProjectionMatrix();
@@ -2317,63 +2316,10 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 resize();
 
-var wcReady = false;
-/* ---------- Japanese watercolour pass ----------
-   The scene is drawn off-screen, then painted onto washi paper by one GLSL pass:
-   the image is softly washed and its colours bleed a little past their edges, colours go pastel with
-   indigo shadows and warm lights, pigment pools darker along edges, granulates in the darker washes,
-   and the paper's grain and fibres show through, staying bare in the brightest areas. */
-const wcTarget = new THREE.WebGLRenderTarget(4, 4, { samples: 4 });
-const wcMat = new THREE.ShaderMaterial({
-  uniforms: { tDiffuse: { value: wcTarget.texture }, res: { value: new THREE.Vector2(4, 4) } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-  fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 res; varying vec2 vUv;
-    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-    float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
-    float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
-    vec3 tap(vec2 uv){ return texture2D(tDiffuse, uv).rgb; }
-    void main(){
-      vec2 px = 1.0 / res, uv = vUv, sc = uv * res;
-      vec2 wob = vec2(fbm(sc / 85.0), fbm(sc / 85.0 + 7.3)) - 0.5;
-      vec2 uw = uv + wob * px * 6.0;
-      vec3 c = vec3(0.0);
-      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) c += tap(uw + vec2(float(i), float(j)) * px * 1.6);
-      c /= 9.0;
-      // airy, lifted tones: darks open up like transparent washes instead of going black
-      c = pow(c, vec3(0.72));
-      float l = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(vec3(l), c, 1.2);                                   // keep the colour, just softer
-      c *= mix(vec3(0.8, 0.84, 0.95), vec3(1.0, 0.982, 0.95), smoothstep(0.25, 0.9, l));   // indigo shade, warm light
-      float gx = dot(tap(uw + vec2(px.x * 2.0, 0.0)) - tap(uw - vec2(px.x * 2.0, 0.0)), vec3(0.333));
-      float gy = dot(tap(uw + vec2(0.0, px.y * 2.0)) - tap(uw - vec2(0.0, px.y * 2.0)), vec3(0.333));
-      float edge = smoothstep(0.035, 0.22, length(vec2(gx, gy)));
-      float paint = 1.0 - l;
-      c *= 1.0 - paint * (fbm(sc / 5.0 + 3.1) - 0.5) * 0.4;     // pigment granulation in the washes
-      c *= 0.965 + 0.05 * fbm(sc / 2.5);                          // paper tooth
-      c *= 0.955 + 0.08 * fbm(uv * 3.2 + 11.0);                   // uneven wash
-      c = mix(c, c * c * 1.08, edge * 0.42);                      // pigment pooled at wet edges
-      vec3 paper = vec3(0.972, 0.954, 0.918) * (0.975 + 0.035 * fbm(vec2(sc.x / 1.4, sc.y / 16.0)));
-      c = mix(c, paper, smoothstep(0.86, 1.0, l) * 0.5);          // bare paper in the lightest areas
-      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
-    }`,
-  depthTest: false, depthWrite: false
-});
-const wcScene = new THREE.Scene(); const wcCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-wcScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), wcMat));
-wcReady = true; sizeWatercolor();
-function sizeWatercolor() {
-  if (!wcReady) return; // the resize observer can fire before the pass below is set up
-  const v = new THREE.Vector2(); renderer.getDrawingBufferSize(v);
-  wcTarget.setSize(Math.max(4, v.x), Math.max(4, v.y)); wcMat.uniforms.res.value.copy(v);
-}
 function renderFrame() {
   const cam = view === 'walk' ? walkCam : camera;
   updateCompass(cam);
-  if (look !== 'watercolor') { renderer.render(scene, cam); return; }
-  renderer.setRenderTarget(wcTarget); renderer.render(scene, cam);
-  renderer.setRenderTarget(null); renderer.render(wcScene, wcCam);
+  renderer.render(scene, cam);
 }
 const wallDoneEl = document.getElementById('wallDone');
 function loop(now) { const wd = !(mode === 'wall' && wallStart); if (wallDoneEl.hidden !== wd) wallDoneEl.hidden = wd; if (view === 'walk') updateWalk(now || performance.now()); else controls.update(); watchFurnitureShadows(now || 0); renderFrame(); requestAnimationFrame(loop); }

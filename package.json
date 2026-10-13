@@ -2,7 +2,7 @@
   "name": "blueprint-maker",
   "private": true,
   "version": "1.0.0",
-  "description": "2.5D floor-plan maker for the BTM 3BHK flat: furniture, daylight by time of day, watercolour look.",
+  "description": "2.5D floor-plan maker for the BTM 3BHK flat: furniture, daylight by time of day, illustrated and technical looks.",
   "type": "module",
   "scripts": {
     "dev": "vite",
